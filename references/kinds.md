@@ -51,7 +51,7 @@ n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
 
 | Kind | Use |
 |---|---|
-| 10000 | mute list · **10001** pin list · **10002** relay list (NIP-65: `["r", url, "read"\|"write"]`) |
+| 10000 | mute list · **10001** pin list · **10002** relay list (NIP-65: `["r", url, "read" or "write"]`) |
 | 10003 | bookmarks · **10004** communities · **10005** public chats · **10006** blocked relays |
 | 10007 | search relays · **10009** group list (NIP-51/29) · **10012** favorite relays |
 | 10013 | private-outbox relays · **10015** interests · **10019** nutzap info (NIP-61) |
