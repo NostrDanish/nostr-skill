@@ -35,7 +35,7 @@ not listed here; new NIPs appear constantly and statuses change.
 - **59** gift wrapping (kind 1059, random timestamp ±2 days) · **62** right to vanish (kind 62) · **70** protected events (`-` tag, relay-gated)
 - **71** video events (kinds 21/22, `imeta` tag) · **72** moderated communities (kind 34550, posts 11 with `a` tag) · **73** external content IDs
 - **75** zap goals (kind 9041) · **78** app data (kind 30078) · **84-87** highlights/curation · **86** relay management API (kind 13534 etc.)
-- **88** NUT-zaps (Cashu ecash) · **89** recommended app handlers (kinds 31989/31990) · **90** data vending machines (kinds 5000-5999 requests, 6000-6999 results)
+- **88** NUT-zaps (Cashu ecash) · **89** recommended app handlers (kinds 31989/31990) · **90** data vending machines — **unrecommended** by the NIPs repo ("out of control"; prefer a use-case-specific spec). Do not start a new DVM on NIP-90
 - **94** file metadata (kind 1063) · **99** classified listings (kind 30402) · **A0** voice messages · **B7** Blossom media servers · **C0** code snippets · **C7** chats (kind 9-based) · **F4** podcasts
 
 ## Deprecated / unrecommended — do NOT build on these

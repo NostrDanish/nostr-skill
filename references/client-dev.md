@@ -67,10 +67,12 @@ Flow per message: rumor (unsigned kind 14, real timestamp) → NIP-44-encrypt in
 
 ## Media upload (Blossom, NIP-B7)
 
-1. sha256 the file; build kind 24242 auth event (`t` tag = `upload`, `x` tag = hash, `expiration`).
-2. `PUT https://<blossom-server>/upload` with body = file, header `Authorization: Nostr <base64(auth-event)>`.
-3. Response gives URL (usually `/<sha256>.<ext>`). Reference in notes directly, or in kind 1063/`imeta` tags.
-Servers: blossom servers are per-user (kind 10063 server list). Legacy NIP-96 hosts still exist; treat Blossom as default.
+Use the `blossom` skill for the procedure. The parts that must not drift:
+
+- NIP-96 is not the upload path. Blossom (BUD-01 retrieval, BUD-02 upload, BUD-03 kind 10063 server list, BUD-11 kind 24242 auth) is.
+- Auth event kind is **24242**. `t` is the verb (`upload`, `get`, `list`, `delete`, `media`). `expiration` is required. `PUT /upload` requires an `x` tag of the file's sha256 and an `X-SHA-256` header. The `Authorization` value is **base64url, no padding**, not standard base64.
+- After download, hash the bytes and compare to the 64-hex in the URL. A URL is not proof of the file.
+- Publish the user's server list as kind **10063** (`server` tags, best server first). When a URL dies, try the same hash on the other servers.
 
 ## NIP-98 HTTP auth for your own API
 

@@ -9,19 +9,23 @@ Pure stdlib (hashlib, hmac, secrets, json). Implements:
   - NIP-44 v2 payload encrypt/decrypt (ChaCha20+HMAC, secp256k1 ECDH)
 
 CLI:
-  python3 nostr_key.py gen                              # new keypair (hex + nsec/npub)
-  python3 nostr_key.py pub <nsec|hex-seckey>            # derive public key
-  python3 nostr_key.py encode <hex> <npub|note|nsec>    # bech32 encode
-  python3 nostr_key.py decode <bech32-string>           # decode any NIP-19 entity
-  python3 nostr_key.py sign <nsec|hex-seckey> '<event-json-without-id-pubkey-sig>'
-  python3 nostr_key.py verify '<full-event-json>'
-  python3 nostr_key.py nip44-encrypt <nsec|hex-seckey> <recipient-npub|hex-pubkey> <plaintext>
-  python3 nostr_key.py nip44-decrypt <nsec|hex-seckey> <sender-npub|hex-pubkey> <payload>
+  python3 nostr_key.py gen
+  python3 nostr_key.py pub <nsec|hex|->          # "-" reads NOSTR_SECRET_KEY
+  python3 nostr_key.py encode <hex> <npub|note|nsec>
+  python3 nostr_key.py decode <bech32-string>
+  python3 nostr_key.py sign <nsec|hex|-> <event-json|->
+      # "-" for the key reads NOSTR_SECRET_KEY; "-" for the event reads stdin.
+      # Prefer the env var. A key on the command line shows up in the process list.
+  python3 nostr_key.py verify <event-json|->
+  python3 nostr_key.py nip44-encrypt <nsec|hex|-> <recipient-npub|hex> <plaintext>
+  python3 nostr_key.py nip44-decrypt <nsec|hex|-> <sender-npub|hex> <payload>
+  python3 nostr_key.py selftest                  # BIP340 + NIP-44 vectors, no network
 """
 import base64
 import hashlib
 import hmac as hmac_mod
 import json
+import os
 import secrets
 import sys
 
@@ -392,9 +396,73 @@ def _resolve_pubkey(s):
     raise ValueError("expected npub1... or 64-char hex public key")
 
 
+def _secret_arg(arg):
+    """Resolve a secret from an argument, or from NOSTR_SECRET_KEY when arg is '-'."""
+    if arg == "-":
+        env = os.environ.get("NOSTR_SECRET_KEY", "").strip()
+        if not env:
+            raise SystemExit("NOSTR_SECRET_KEY is not set")
+        return _resolve_seckey(env)
+    return _resolve_seckey(arg)
+
+
+def _json_arg(arg):
+    raw = sys.stdin.read() if arg == "-" else arg
+    return json.loads(raw)
+
+
+def selftest():
+    """Official public vectors. Prints only PASS/FAIL, never key material."""
+    ok = True
+
+    def check(name, cond):
+        nonlocal ok
+        ok = ok and cond
+        print(("PASS " if cond else "FAIL ") + name)
+
+    sk = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000003")
+    msg = bytes(32)
+    aux = bytes(32)
+    sig = "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0"
+    pk = bytes.fromhex("F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9")
+    check("bip340 sign vector 0", schnorr_sign(msg, sk, aux).hex().upper() == sig)
+    check("bip340 verify vector 0", schnorr_verify(msg, pk, bytes.fromhex(sig)))
+    check("bip340 reject bad sig", not schnorr_verify(msg, pk, bytes.fromhex(sig)[:-1] + b"\x00"))
+
+    sec1 = "0000000000000000000000000000000000000000000000000000000000000001"
+    sec2 = "0000000000000000000000000000000000000000000000000000000000000002"
+    pk2 = _i2b(_mul(_b2i(bytes.fromhex(sec2)))[0]).hex()
+    pk1 = _i2b(_mul(_b2i(bytes.fromhex(sec1)))[0]).hex()
+    ck = nip44_conversation_key(sec1, pk2).hex()
+    check("nip44 conversation key", ck == "c41c775356fd92eadc63ff5a0dc1da211b268cbea22316767095b2871ea1412d")
+    payload = (
+        "AgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABee0G5VSK0/9YypIObAtDKfYEAjD"
+        "35uVkHyB0F4DwrcNaCXlCWZKaArsGrY6M9wnuTMxWfp1RTN9Xga8no+kF5Vsb"
+    )
+    try:
+        plain = nip44_decrypt(sec2, pk1, payload)
+    except Exception:
+        plain = None
+    check("nip44 decrypt vector", plain == "a")
+
+    round_sk, round_pk = generate_keypair()
+    ev = sign_event({"kind": 1, "content": "selftest", "tags": [], "created_at": 1700000000}, round_sk)
+    check("event id length", len(ev["id"]) == 64 and ev["pubkey"] == round_pk)
+    check("event verify roundtrip", verify_event(ev))
+    ev["content"] = "tampered"
+    check("event verify rejects tamper", not verify_event(ev))
+
+    decoded = decode_entity(npub_encode(pk.hex()))
+    check("npub roundtrip", decoded.get("hex") == pk.hex())
+    print("ALL VECTORS PASS" if ok else "SOME VECTORS FAILED")
+    return ok
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
-    if cmd == "gen":
+    if cmd == "selftest":
+        sys.exit(0 if selftest() else 1)
+    elif cmd == "gen":
         sk, pk = generate_keypair()
         print(json.dumps({
             "secret_key_hex": sk, "nsec": nsec_encode(sk),
@@ -402,7 +470,7 @@ def main():
         }, indent=2))
         print("\n⚠️  The nsec IS the account. Never commit it, never send it to a relay or server.", file=sys.stderr)
     elif cmd == "pub":
-        sk = _resolve_seckey(sys.argv[2])
+        sk = _secret_arg(sys.argv[2])
         pk = _i2b(_mul(_b2i(bytes.fromhex(sk)))[0]).hex()
         print(json.dumps({"public_key_hex": pk, "npub": npub_encode(pk)}, indent=2))
     elif cmd == "encode":
@@ -410,16 +478,21 @@ def main():
     elif cmd == "decode":
         print(json.dumps(decode_entity(sys.argv[2]), indent=2))
     elif cmd == "sign":
-        ev = sign_event(json.loads(sys.argv[3]), _resolve_seckey(sys.argv[2]))
+        # `sign -` : event JSON on stdin, key from NOSTR_SECRET_KEY.
+        # `sign <key> <event-json|->` : key argument (avoid this for raw nsec).
+        if len(sys.argv) == 3:
+            ev = sign_event(_json_arg(sys.argv[2]), _secret_arg("-"))
+        else:
+            ev = sign_event(_json_arg(sys.argv[3]), _secret_arg(sys.argv[2]))
         print(json.dumps(ev, ensure_ascii=False))
     elif cmd == "verify":
-        ok = verify_event(json.loads(sys.argv[2]))
+        ok = verify_event(_json_arg(sys.argv[2]))
         print("VALID" if ok else "INVALID")
         sys.exit(0 if ok else 1)
     elif cmd == "nip44-encrypt":
-        print(nip44_encrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+        print(nip44_encrypt(_secret_arg(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     elif cmd == "nip44-decrypt":
-        print(nip44_decrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+        print(nip44_decrypt(_secret_arg(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     else:
         print(__doc__)
         sys.exit(1)
