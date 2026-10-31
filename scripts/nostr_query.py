@@ -11,8 +11,8 @@ CLI:
   # Fetch a NIP-11 relay information document.
   python3 nostr_query.py info wss://relay.damus.io
 
-  # Publish a signed event (pipe from nostr_key.py sign).
-  python3 nostr_query.py publish wss://relay.damus.io '<signed-event-json>'
+  # Publish a signed event. '-' reads the event JSON from stdin.
+  python3 nostr_query.py publish wss://relay.damus.io -
 
 Filter cheat sheet: kinds, ids, authors (prefixes allowed), #e/#p/#d/#t via
 {"#e": [...]}, since/until (unix), limit, search (NIP-50, relay-dependent).
@@ -65,15 +65,21 @@ def info(relay, timeout=15):
         return json.load(r)
 
 
+def _arg_text(token):
+    if token == "-":
+        return sys.stdin.read()
+    return token
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
     if cmd == "query":
-        events = asyncio.run(query(sys.argv[2], sys.argv[3]))
+        events = asyncio.run(query(sys.argv[2], _arg_text(sys.argv[3])))
         for ev in events:
             print(json.dumps(ev, ensure_ascii=False))
         print(f"# {len(events)} events", file=sys.stderr)
     elif cmd == "publish":
-        res = asyncio.run(publish(sys.argv[2], sys.argv[3]))
+        res = asyncio.run(publish(sys.argv[2], _arg_text(sys.argv[3])))
         ok = res[2]
         print(f"{'ACCEPTED' if ok else 'REJECTED'}: {res[3] if len(res) > 3 else ''}")
         sys.exit(0 if ok else 1)

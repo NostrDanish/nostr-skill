@@ -17,16 +17,17 @@ description: Build, debug, and operate anything on the Nostr protocol. Use whene
 
 | Task | Do this |
 |---|---|
-| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI) |
-| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install websockets`) |
+| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI). Pass `-` as the key so it reads `NOSTR_SECRET_KEY` from the environment, and `-` as the JSON argument to read stdin. Do not put an nsec on the command line. |
+| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install websockets`). A JSON argument of `-` reads stdin. |
 | Build a client/bot/app, pick libraries, signers, subscriptions, DMs, zaps, media upload | Read [references/client-dev.md](references/client-dev.md) |
 | Decide which NIP to use, check if a NIP is deprecated | Read [references/nips.md](references/nips.md) |
 | Look up an event kind number or tag convention | Read [references/kinds.md](references/kinds.md) |
 | Install/configure/secure a relay | Read [references/relay-ops.md](references/relay-ops.md) |
+| Upload, mirror, list, or delete a Blossom blob | Use the `blossom` skill. Do not hand-roll the `Authorization` header. |
 
 ## Non-negotiable rules
 
-1. **The nsec IS the account.** Never log it, commit it, send it to any server/relay, or ask the user to paste it where it isn't needed. Web clients use NIP-07 (`window.nostr`) or NIP-46 remote signers; only bots/backends hold nsecs, in env vars.
+1. **The nsec IS the account.** Never log it, commit it, send it to any server/relay, put it in a process argument, or ask the user to paste it where it isn't needed. Web clients use NIP-07 (`window.nostr`) or NIP-46 remote signers; only bots/backends hold nsecs, in env vars (`NOSTR_SECRET_KEY`).
 2. **Never hand-roll crypto for production apps** — use the audited libraries in client-dev.md. `scripts/nostr_key.py` is stdlib-only for portability (great for tooling, key conversion, verifying, one-off signing); it passes all official BIP340 and NIP-44 test vectors but is not constant-time.
 3. **NIP-04 is dead, NIP-96 is dead.** DMs = NIP-17 (NIP-44 encryption + NIP-59 gift wrap). Media = Blossom. Deprecated NIPs with their replacements: [references/nips.md](references/nips.md).
 4. **Publish to the user's write relays, read from their read relays** (NIP-65 kind-10002 lists). Querying only one big relay is the #1 client bug. Fetch relay lists from a few indexer relays first.

@@ -4,14 +4,16 @@
 
 | Range | Class | Semantics |
 |---|---|---|
-| 0, 3, 41, 1000–9999 | regular | stored, all versions kept |
-| 10000–19999 (incl. 0, 3) | replaceable | per pubkey+kind, keep newest only |
+| everything else (including 1000–9999) | regular | stored, all versions kept |
+| 0, 3, and 10000–19999 | replaceable | per pubkey+kind, keep newest only |
 | 20000–29999 | ephemeral | never stored, live-only |
-| 30000–39999 (incl. 2, 41) | addressable | per pubkey+kind+`d` tag, keep newest |
+| 30000–39999 | addressable | per pubkey+kind+`d` tag, keep newest |
 
-n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
+Kind 0 (metadata) and kind 3 (contacts) are replaceable even though they sit outside 10000–19999. Kind 2 and kind 41 are ordinary regular kinds under current NIP-01; do not treat them as addressable.
 
 ## Regular kinds
+
+Kinds 0 and 3 are listed here for their fields. Both are replaceable (see the range table), not regular.
 
 | Kind | Use |
 |---|---|
@@ -41,10 +43,9 @@ n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
 | 6000–6999 | DVM results · **7000** DVM feedback (payment-request, status) |
 | 9000–9030 | NIP-29 group moderation (put-user, remove-user, edit-metadata, delete-event, create/delete group...) |
 | 9734 | zap request · **9735** zap receipt (NIP-57) |
-| 10000–30003 | see lists below |
-| 23194 | NWC request · **23195** NWC response · **13194** NWC info (NIP-47) |
-| 24133 | Nostr Connect (NIP-46) |
 | 27235 | HTTP auth (NIP-98; must have `u` and `method` tags, created_at ±60s) |
+| 10000–19999 | replaceable lists and metadata (below) |
+| 20000–29999 | ephemeral (below) — includes NIP-42 auth 22242, NWC 23194/23195, Nostr Connect 24133 |
 | 30000–39999 | addressable (below) |
 
 ## Replaceable (10000–19999)

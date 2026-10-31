@@ -10,18 +10,23 @@ Pure stdlib (hashlib, hmac, secrets, json). Implements:
 
 CLI:
   python3 nostr_key.py gen                              # new keypair (hex + nsec/npub)
-  python3 nostr_key.py pub <nsec|hex-seckey>            # derive public key
+  python3 nostr_key.py pub <nsec|hex-seckey|->          # derive public key
   python3 nostr_key.py encode <hex> <npub|note|nsec>    # bech32 encode
   python3 nostr_key.py decode <bech32-string>           # decode any NIP-19 entity
-  python3 nostr_key.py sign <nsec|hex-seckey> '<event-json-without-id-pubkey-sig>'
-  python3 nostr_key.py verify '<full-event-json>'
-  python3 nostr_key.py nip44-encrypt <nsec|hex-seckey> <recipient-npub|hex-pubkey> <plaintext>
-  python3 nostr_key.py nip44-decrypt <nsec|hex-seckey> <sender-npub|hex-pubkey> <payload>
+  python3 nostr_key.py sign <nsec|hex-seckey|-> <event-json|->
+  python3 nostr_key.py verify <full-event-json|->
+  python3 nostr_key.py nip44-encrypt <nsec|hex-seckey|-> <recipient-npub|hex-pubkey> <plaintext>
+  python3 nostr_key.py nip44-decrypt <nsec|hex-seckey|-> <sender-npub|hex-pubkey> <payload>
+
+A key argument of "-" reads NOSTR_SECRET_KEY from the environment (never printed).
+A JSON argument of "-" reads that JSON from stdin. Prefer both so an nsec never
+appears in the process list.
 """
 import base64
 import hashlib
 import hmac as hmac_mod
 import json
+import os
 import secrets
 import sys
 
@@ -392,6 +397,21 @@ def _resolve_pubkey(s):
     raise ValueError("expected npub1... or 64-char hex public key")
 
 
+def _load_secret(token):
+    """Resolve a secret from an argument. '-' reads NOSTR_SECRET_KEY and never echoes it."""
+    if token in ("-", "env"):
+        token = os.environ.get("NOSTR_SECRET_KEY", "").strip()
+        if not token:
+            raise SystemExit("NOSTR_SECRET_KEY is not set")
+    return _resolve_seckey(token)
+
+
+def _load_text(token):
+    if token == "-":
+        return sys.stdin.read()
+    return token
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
     if cmd == "gen":
@@ -402,7 +422,7 @@ def main():
         }, indent=2))
         print("\n⚠️  The nsec IS the account. Never commit it, never send it to a relay or server.", file=sys.stderr)
     elif cmd == "pub":
-        sk = _resolve_seckey(sys.argv[2])
+        sk = _load_secret(sys.argv[2])
         pk = _i2b(_mul(_b2i(bytes.fromhex(sk)))[0]).hex()
         print(json.dumps({"public_key_hex": pk, "npub": npub_encode(pk)}, indent=2))
     elif cmd == "encode":
@@ -410,16 +430,16 @@ def main():
     elif cmd == "decode":
         print(json.dumps(decode_entity(sys.argv[2]), indent=2))
     elif cmd == "sign":
-        ev = sign_event(json.loads(sys.argv[3]), _resolve_seckey(sys.argv[2]))
+        ev = sign_event(json.loads(_load_text(sys.argv[3])), _load_secret(sys.argv[2]))
         print(json.dumps(ev, ensure_ascii=False))
     elif cmd == "verify":
-        ok = verify_event(json.loads(sys.argv[2]))
+        ok = verify_event(json.loads(_load_text(sys.argv[2])))
         print("VALID" if ok else "INVALID")
         sys.exit(0 if ok else 1)
     elif cmd == "nip44-encrypt":
-        print(nip44_encrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+        print(nip44_encrypt(_load_secret(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     elif cmd == "nip44-decrypt":
-        print(nip44_decrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+        print(nip44_decrypt(_load_secret(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     else:
         print(__doc__)
         sys.exit(1)
