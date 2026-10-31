@@ -4,12 +4,12 @@
 
 | Range | Class | Semantics |
 |---|---|---|
-| 0, 3, 41, 1000–9999 | regular | stored, all versions kept |
-| 10000–19999 (incl. 0, 3) | replaceable | per pubkey+kind, keep newest only |
+| 1, 4–44, 1000–9999 (and most other <10000 except the exceptions below) | regular | stored, all versions kept |
+| 10000–19999, **plus kinds 0 and 3** | replaceable | per pubkey+kind, keep newest only |
 | 20000–29999 | ephemeral | never stored, live-only |
-| 30000–39999 (incl. 2, 41) | addressable | per pubkey+kind+`d` tag, keep newest |
+| 30000–39999 (plus kind 2 and kind 41 in some implementations) | addressable | per pubkey+kind+`d` tag, keep newest |
 
-n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
+NIP-01 exceptions: kind **0** (metadata) and kind **3** (contacts) are *replaceable*, even though their numbers sit below 10000. Do not treat them as regular.
 
 ## Regular kinds
 

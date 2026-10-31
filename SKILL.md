@@ -1,6 +1,7 @@
 ---
 name: nostr
 description: Build, debug, and operate anything on the Nostr protocol. Use whenever the task involves Nostr clients, bots, relays, or keys — publishing/signing/verifying events, generating or converting keys (npub/nsec/note/nevent/naddr/nprofile), querying relays with NIP-01 filters, choosing the right NIP for a feature (DMs NIP-17, zaps NIP-57, groups NIP-29, long-form NIP-23, lists NIP-51, outbox model NIP-65, Blossom media), setting up a relay (strfry, khatru, nostr-rs-relay), NIP-07 browser signing, NIP-46 remote signers, NIP-98 HTTP auth, or decoding any bech32 nostr identifier. Triggers on "nostr", NIP numbers, relay URLs (wss://), and npub1/nsec1/note1/nevent1/naddr1 strings.
+license: CC-BY-SA-4.0
 ---
 
 # Nostr
@@ -17,12 +18,16 @@ description: Build, debug, and operate anything on the Nostr protocol. Use whene
 
 | Task | Do this |
 |---|---|
-| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI) |
-| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install websockets`) |
+| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI). Stdlib toolkit = agents/CI/one-offs, not production wallets. |
+| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install -r requirements.txt`) |
+| Read **exact current** NIP wording, a new/hex NIP (`A3`, `B7`), or whether a NIP is still recommended | Use the **`nostr-nips`** skill (live fetch). `references/nips.md` is only a dated index. |
 | Build a client/bot/app, pick libraries, signers, subscriptions, DMs, zaps, media upload | Read [references/client-dev.md](references/client-dev.md) |
-| Decide which NIP to use, check if a NIP is deprecated | Read [references/nips.md](references/nips.md) |
-| Look up an event kind number or tag convention | Read [references/kinds.md](references/kinds.md) |
+| Decide which NIP to use, check if a NIP is deprecated (quick) | Read [references/nips.md](references/nips.md), then confirm live text via `nostr-nips` |
+| Look up an event kind number or tag convention | Read [references/kinds.md](references/kinds.md). Kind **39697** (SIP-01 web index) → `sip-01` skill. |
 | Install/configure/secure a relay | Read [references/relay-ops.md](references/relay-ops.md) |
+| Debug a live relay, migrate events, bunker sign from a shell | Use the **`nak`** skill |
+
+Companion map: `nostr` = offline toolkit · `nostr-nips` = live spec · `nak` = CLI · `sip-01` = kind 39697 only.
 
 ## Non-negotiable rules
 

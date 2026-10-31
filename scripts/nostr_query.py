@@ -50,12 +50,19 @@ async def query(relay, filter_json, timeout=15):
 async def publish(relay, event_json, timeout=15):
     async with websockets.connect(relay, open_timeout=timeout) as ws:
         await ws.send(json.dumps(["EVENT", json.loads(event_json)]))
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
         while True:
-            msg = json.loads(await asyncio.wait_for(ws.recv(), timeout))
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError("relay did not send OK")
+            msg = json.loads(await asyncio.wait_for(ws.recv(), remaining))
             if msg[0] == "OK":
                 return msg  # ["OK", <event-id>, true|false, <message>]
             if msg[0] == "NOTICE":
                 print(f"NOTICE: {msg[1]}", file=sys.stderr)
+            if msg[0] == "AUTH":
+                print("relay requested AUTH; this script does not answer challenges", file=sys.stderr)
 
 
 def info(relay, timeout=15):

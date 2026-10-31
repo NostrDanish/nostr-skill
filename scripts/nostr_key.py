@@ -14,7 +14,9 @@ CLI:
   python3 nostr_key.py encode <hex> <npub|note|nsec>    # bech32 encode
   python3 nostr_key.py decode <bech32-string>           # decode any NIP-19 entity
   python3 nostr_key.py sign <nsec|hex-seckey> '<event-json-without-id-pubkey-sig>'
+      # event JSON may also be '-' or omitted (reads stdin) — do not pass /dev/stdin as a path string
   python3 nostr_key.py verify '<full-event-json>'
+  python3 nostr_key.py selftest                         # sign/verify + encode/decode round-trips
   python3 nostr_key.py nip44-encrypt <nsec|hex-seckey> <recipient-npub|hex-pubkey> <plaintext>
   python3 nostr_key.py nip44-decrypt <nsec|hex-seckey> <sender-npub|hex-pubkey> <payload>
 """
@@ -410,19 +412,45 @@ def main():
     elif cmd == "decode":
         print(json.dumps(decode_entity(sys.argv[2]), indent=2))
     elif cmd == "sign":
-        ev = sign_event(json.loads(sys.argv[3]), _resolve_seckey(sys.argv[2]))
+        raw = sys.argv[3] if len(sys.argv) > 3 else "-"
+        if raw in ("-", "/dev/stdin"):
+            raw = sys.stdin.read()
+        ev = sign_event(json.loads(raw), _resolve_seckey(sys.argv[2]))
         print(json.dumps(ev, ensure_ascii=False))
     elif cmd == "verify":
-        ok = verify_event(json.loads(sys.argv[2]))
+        raw = sys.argv[2] if len(sys.argv) > 2 else sys.stdin.read()
+        ok = verify_event(json.loads(raw))
         print("VALID" if ok else "INVALID")
         sys.exit(0 if ok else 1)
     elif cmd == "nip44-encrypt":
         print(nip44_encrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     elif cmd == "nip44-decrypt":
         print(nip44_decrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+    elif cmd == "selftest":
+        _selftest()
     else:
         print(__doc__)
         sys.exit(1)
+
+
+def _selftest():
+    """Round-trip checks (stdlib toolkit — not a constant-time wallet)."""
+    sk, pk = generate_keypair()
+    ev = sign_event({"kind": 1, "content": "selftest", "tags": [], "created_at": 1700000000}, sk)
+    assert ev["pubkey"] == pk, "pubkey mismatch"
+    assert verify_event(ev), "signed event failed verify"
+    bad = dict(ev, content="tampered")
+    assert not verify_event(bad), "tampered event verified"
+    npub = npub_encode(pk)
+    nsec = nsec_encode(sk)
+    assert decode_entity(npub)["hex"] == pk, "npub round-trip"
+    assert decode_entity(nsec)["hex"] == sk, "nsec round-trip"
+    note = bech32_encode("note", bytes.fromhex(ev["id"]))
+    assert decode_entity(note)["hex"] == ev["id"], "note round-trip"
+    other_sk, other_pk = generate_keypair()
+    payload = nip44_encrypt(sk, other_pk, "hello nostr")
+    assert nip44_decrypt(other_sk, pk, payload) == "hello nostr", "nip44 round-trip"
+    print("selftest: ok")
 
 
 if __name__ == "__main__":

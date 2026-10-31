@@ -1,7 +1,10 @@
 # NIP guide — which spec to reach for (status as of Sep 2026)
 
-Canonical source: https://github.com/nostr-protocol/nips — check it for anything
-not listed here; new NIPs appear constantly and statuses change.
+Canonical source: https://github.com/nostr-protocol/nips — this file is a
+**dated index (Sep 2026)**. For exact current wording, hex-named NIPs (`A3`,
+`B7`, `C7`), or anything not listed here, use the `nostr-nips` skill (raw
+fetch). Satellite repos (e.g. NWC extensions for NIP-47) live outside the
+main nips tree — follow the NIP's own "see also" links.
 
 ## The essential dozen (implement these first)
 
