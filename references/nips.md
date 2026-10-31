@@ -1,7 +1,8 @@
-# NIP guide — which spec to reach for (status as of Sep 2026)
+# NIP guide — which spec to reach for (offline snapshot, Oct 2026)
 
-Canonical source: https://github.com/nostr-protocol/nips — check it for anything
-not listed here; new NIPs appear constantly and statuses change.
+Canonical source: https://github.com/nostr-protocol/nips. Load `nostr-nips`
+and fetch the live README whenever status or field names matter. This file
+is a routing cheat sheet, not the spec.
 
 ## The essential dozen (implement these first)
 
@@ -35,7 +36,7 @@ not listed here; new NIPs appear constantly and statuses change.
 - **59** gift wrapping (kind 1059, random timestamp ±2 days) · **62** right to vanish (kind 62) · **70** protected events (`-` tag, relay-gated)
 - **71** video events (kinds 21/22, `imeta` tag) · **72** moderated communities (kind 34550, posts 11 with `a` tag) · **73** external content IDs
 - **75** zap goals (kind 9041) · **78** app data (kind 30078) · **84-87** highlights/curation · **86** relay management API (kind 13534 etc.)
-- **88** NUT-zaps (Cashu ecash) · **89** recommended app handlers (kinds 31989/31990) · **90** data vending machines (kinds 5000-5999 requests, 6000-6999 results)
+- **88** polls · **89** recommended app handlers (kinds 31989/31990) · **61** nutzaps (kind 9321) · **90** DVMs (**unrecommended**)
 - **94** file metadata (kind 1063) · **99** classified listings (kind 30402) · **A0** voice messages · **B7** Blossom media servers · **C0** code snippets · **C7** chats (kind 9-based) · **F4** podcasts
 
 ## Deprecated / unrecommended — do NOT build on these
@@ -49,6 +50,8 @@ not listed here; new NIPs appear constantly and statuses change.
 | 26 | Delegated event signing | NIP-46 remote signing |
 | 28 | Public chat channels | **NIP-29** groups |
 | 03, 31 | OpenTimestamps, unknown-event `alt` handling | (niche; NIP-31's `alt` convention still widely used informally) |
+| 72 | Moderated communities | **NIP-29** groups |
+| 90 | Data vending machines | use-case-specific microstandards |
 | 96 | HTTP file storage | **Blossom (NIP-B7)** |
 | EE | MLS E2EE messaging | **Marmot Protocol** (MDK) |
 

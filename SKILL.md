@@ -17,12 +17,17 @@ description: Build, debug, and operate anything on the Nostr protocol. Use whene
 
 | Task | Do this |
 |---|---|
-| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI) |
-| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install websockets`) |
+| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI). `sign`/`verify` accept `-` or `/dev/stdin` for event JSON. After changing the script: `python3 scripts/nostr_key.py selftest` |
+| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install websockets`). Add `--verify` on `query` to drop events whose id/sig fail |
 | Build a client/bot/app, pick libraries, signers, subscriptions, DMs, zaps, media upload | Read [references/client-dev.md](references/client-dev.md) |
-| Decide which NIP to use, check if a NIP is deprecated | Read [references/nips.md](references/nips.md) |
+| Decide which NIP to use, check if a NIP is deprecated | Load `nostr-nips` for **live** spec text. This skill's [references/nips.md](references/nips.md) is an offline snapshot only |
 | Look up an event kind number or tag convention | Read [references/kinds.md](references/kinds.md) |
+| Auth-required, CLOSED, empty EOSE, wrong relay list | Read [references/failure-modes.md](references/failure-modes.md) |
 | Install/configure/secure a relay | Read [references/relay-ops.md](references/relay-ops.md) |
+| CLI debugging with `nak` already installed | Load the `nak` skill — do not reinvent those commands here |
+| NIP-47 wallet connect / `nostr+walletconnect://` | Load `nostr-nwc` |
+| Blossom upload / kind 10063 / dead media URLs | Load `nostr-blossom` |
+| `bunker://` / `nostrconnect://` / kind 24133 | Load `nostr-nip-46` |
 
 ## Non-negotiable rules
 

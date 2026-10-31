@@ -13,10 +13,13 @@ CLI:
   python3 nostr_key.py pub <nsec|hex-seckey>            # derive public key
   python3 nostr_key.py encode <hex> <npub|note|nsec>    # bech32 encode
   python3 nostr_key.py decode <bech32-string>           # decode any NIP-19 entity
-  python3 nostr_key.py sign <nsec|hex-seckey> '<event-json-without-id-pubkey-sig>'
+  python3 nostr_key.py sign <nsec|hex-seckey> '<event-json>'
+  python3 nostr_key.py sign <nsec|hex-seckey> -         # event JSON on stdin
   python3 nostr_key.py verify '<full-event-json>'
+  python3 nostr_key.py verify -                         # event JSON on stdin
   python3 nostr_key.py nip44-encrypt <nsec|hex-seckey> <recipient-npub|hex-pubkey> <plaintext>
   python3 nostr_key.py nip44-decrypt <nsec|hex-seckey> <sender-npub|hex-pubkey> <payload>
+  python3 nostr_key.py selftest                         # BIP340 + NIP-44 vectors (exit 0/1)
 """
 import base64
 import hashlib
@@ -392,6 +395,43 @@ def _resolve_pubkey(s):
     raise ValueError("expected npub1... or 64-char hex public key")
 
 
+def _read_json_arg(arg):
+    if arg in ("-", "/dev/stdin"):
+        return json.loads(sys.stdin.read())
+    return json.loads(arg)
+
+
+def selftest():
+    """Official BIP340 vector 0 + event sign/verify + NIP-44 roundtrip."""
+    # BIP340 test vector 0 (https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv)
+    sk = bytes.fromhex("0000000000000000000000000000000000000000000000000000000000000003")
+    pk = bytes.fromhex("F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9")
+    msg = bytes(32)
+    aux = bytes(32)
+    sig = schnorr_sign(msg, sk, aux)
+    expect = bytes.fromhex(
+        "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA8215"
+        "25F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0"
+    )
+    if not schnorr_verify(msg, pk, sig):
+        raise AssertionError("BIP340 vector 0: produced signature does not verify")
+    if not schnorr_verify(msg, pk, expect):
+        raise AssertionError("BIP340 vector 0: official signature does not verify with this impl")
+    if sig != expect:
+        raise AssertionError("BIP340 vector 0: signature bytes differ from official vector")
+
+    ev = sign_event({"kind": 1, "created_at": 0, "tags": [], "content": "selftest"}, sk.hex())
+    if not verify_event(ev):
+        raise AssertionError("signed event failed verify_event")
+
+    a_sk, a_pk = generate_keypair()
+    _b_sk, b_pk = generate_keypair()
+    payload = nip44_encrypt(a_sk, b_pk, "hello nostr")
+    if nip44_decrypt(_b_sk, a_pk, payload) != "hello nostr":
+        raise AssertionError("NIP-44 roundtrip failed")
+    print("selftest OK (BIP340 vector 0 + event sign/verify + NIP-44 roundtrip)")
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
     if cmd == "gen":
@@ -410,16 +450,20 @@ def main():
     elif cmd == "decode":
         print(json.dumps(decode_entity(sys.argv[2]), indent=2))
     elif cmd == "sign":
-        ev = sign_event(json.loads(sys.argv[3]), _resolve_seckey(sys.argv[2]))
+        raw = sys.argv[3] if len(sys.argv) > 3 else "-"
+        ev = sign_event(_read_json_arg(raw), _resolve_seckey(sys.argv[2]))
         print(json.dumps(ev, ensure_ascii=False))
     elif cmd == "verify":
-        ok = verify_event(json.loads(sys.argv[2]))
+        raw = sys.argv[2] if len(sys.argv) > 2 else "-"
+        ok = verify_event(_read_json_arg(raw))
         print("VALID" if ok else "INVALID")
         sys.exit(0 if ok else 1)
     elif cmd == "nip44-encrypt":
         print(nip44_encrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     elif cmd == "nip44-decrypt":
         print(nip44_decrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+    elif cmd == "selftest":
+        selftest()
     else:
         print(__doc__)
         sys.exit(1)
