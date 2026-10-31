@@ -9,19 +9,25 @@ Pure stdlib (hashlib, hmac, secrets, json). Implements:
   - NIP-44 v2 payload encrypt/decrypt (ChaCha20+HMAC, secp256k1 ECDH)
 
 CLI:
+  python3 nostr_key.py selftest                         # BIP-340 vector, event round-trip, NIP-44
   python3 nostr_key.py gen                              # new keypair (hex + nsec/npub)
-  python3 nostr_key.py pub <nsec|hex-seckey>            # derive public key
+  python3 nostr_key.py pub <nsec|hex|env>               # derive public key
   python3 nostr_key.py encode <hex> <npub|note|nsec>    # bech32 encode
   python3 nostr_key.py decode <bech32-string>           # decode any NIP-19 entity
-  python3 nostr_key.py sign <nsec|hex-seckey> '<event-json-without-id-pubkey-sig>'
-  python3 nostr_key.py verify '<full-event-json>'
-  python3 nostr_key.py nip44-encrypt <nsec|hex-seckey> <recipient-npub|hex-pubkey> <plaintext>
-  python3 nostr_key.py nip44-decrypt <nsec|hex-seckey> <sender-npub|hex-pubkey> <payload>
+  python3 nostr_key.py sign <nsec|hex|env> <event-json|->
+  python3 nostr_key.py verify <event-json|->
+  python3 nostr_key.py nip44-encrypt <nsec|hex|env> <recipient-npub|hex> <plaintext>
+  python3 nostr_key.py nip44-decrypt <nsec|hex|env> <sender-npub|hex> <payload>
+
+Pass the secret as the argument `env` (reads NOSTR_SECRET_KEY) and pass `-`
+for event JSON on stdin. A secret typed on the command line is visible to
+other users via the process list.
 """
 import base64
 import hashlib
 import hmac as hmac_mod
 import json
+import os
 import secrets
 import sys
 
@@ -337,8 +343,10 @@ def _pad(msg):
 
 
 def _unpad(data):
+    if len(data) < 2:
+        raise ValueError("invalid padding")
     ln = int.from_bytes(data[:2], "big")
-    if ln < 1 or ln > len(data) - 2 or any(data[2 + ln:]):
+    if ln > len(data) - 2 or any(data[2 + ln:]):
         raise ValueError("invalid padding")
     return data[2:2 + ln]
 
@@ -392,17 +400,76 @@ def _resolve_pubkey(s):
     raise ValueError("expected npub1... or 64-char hex public key")
 
 
+def _load_secret(token):
+    if token in ("env", "-"):
+        raw = os.environ.get("NOSTR_SECRET_KEY", "").strip()
+        if not raw:
+            raise SystemExit("NOSTR_SECRET_KEY is not set")
+        return _resolve_seckey(raw)
+    print(
+        "warning: a secret on the command line is visible in the process list; "
+        "prefer NOSTR_SECRET_KEY and the argument 'env'",
+        file=sys.stderr,
+    )
+    return _resolve_seckey(token)
+
+
+def _read_json(token):
+    raw = sys.stdin.read() if token == "-" else token
+    return json.loads(raw)
+
+
+def selftest():
+    ok = True
+
+    def check(name, cond):
+        nonlocal ok
+        print(("PASS " if cond else "FAIL ") + name)
+        ok = ok and bool(cond)
+
+    sk = bytes.fromhex("00" * 31 + "03")
+    sig = schnorr_sign(bytes(32), sk, aux=bytes(32))
+    pk = _i2b(_mul(_b2i(sk))[0])
+    check("bip340-pk", pk.hex() == "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9")
+    check(
+        "bip340-sig",
+        sig.hex() == "e907831f80848d1069a5371b402410364bdf1c5f8307b0084c55f1ce2dca8215"
+        "25f66a4a85ea8b71e482a74f382d2ce5ebeee8fdb2172f477df4900d310536c0",
+    )
+    check("bip340-verify", schnorr_verify(bytes(32), pk, sig))
+    hx = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+    check("npub", npub_encode(hx) == "npub180cvv07tjdrrgpa0j7j7tmnyl2yr6yr7l8j4s3evf6u64th6gkwsyjh6w6")
+    check("npub-decode", decode_entity(npub_encode(hx))["hex"] == hx)
+    sec, pub = generate_keypair()
+    ev = sign_event({"kind": 1, "created_at": 1700000000, "tags": [["t", "x"]], "content": "hi"}, sec)
+    check("event-roundtrip", verify_event(ev))
+    tampered = dict(ev, content="no")
+    check("event-tamper", not verify_event(tampered))
+    for text in ("", "hello", "h" * 100):
+        blob = nip44_encrypt(sec, pub, text)
+        check(f"nip44-len-{len(text)}", nip44_decrypt(sec, pub, blob) == text)
+    sec2, _pub2 = generate_keypair()
+    try:
+        nip44_decrypt(sec2, pub, blob)
+        check("nip44-mac", False)
+    except ValueError:
+        check("nip44-mac", True)
+    return ok
+
+
 def main():
     cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
+    if cmd == "selftest":
+        sys.exit(0 if selftest() else 1)
     if cmd == "gen":
         sk, pk = generate_keypair()
         print(json.dumps({
             "secret_key_hex": sk, "nsec": nsec_encode(sk),
             "public_key_hex": pk, "npub": npub_encode(pk),
         }, indent=2))
-        print("\n⚠️  The nsec IS the account. Never commit it, never send it to a relay or server.", file=sys.stderr)
+        print("\nThe nsec IS the account. Never commit it, never send it to a relay or server.", file=sys.stderr)
     elif cmd == "pub":
-        sk = _resolve_seckey(sys.argv[2])
+        sk = _load_secret(sys.argv[2])
         pk = _i2b(_mul(_b2i(bytes.fromhex(sk)))[0]).hex()
         print(json.dumps({"public_key_hex": pk, "npub": npub_encode(pk)}, indent=2))
     elif cmd == "encode":
@@ -410,16 +477,16 @@ def main():
     elif cmd == "decode":
         print(json.dumps(decode_entity(sys.argv[2]), indent=2))
     elif cmd == "sign":
-        ev = sign_event(json.loads(sys.argv[3]), _resolve_seckey(sys.argv[2]))
-        print(json.dumps(ev, ensure_ascii=False))
+        ev = sign_event(_read_json(sys.argv[3] if len(sys.argv) > 3 else "-"), _load_secret(sys.argv[2]))
+        print(json.dumps(ev, ensure_ascii=False, separators=(",", ":")))
     elif cmd == "verify":
-        ok = verify_event(json.loads(sys.argv[2]))
+        ok = verify_event(_read_json(sys.argv[2] if len(sys.argv) > 2 else "-"))
         print("VALID" if ok else "INVALID")
         sys.exit(0 if ok else 1)
     elif cmd == "nip44-encrypt":
-        print(nip44_encrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+        print(nip44_encrypt(_load_secret(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     elif cmd == "nip44-decrypt":
-        print(nip44_decrypt(_resolve_seckey(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
+        print(nip44_decrypt(_load_secret(sys.argv[2]), _resolve_pubkey(sys.argv[3]), sys.argv[4]))
     else:
         print(__doc__)
         sys.exit(1)

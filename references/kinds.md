@@ -4,12 +4,12 @@
 
 | Range | Class | Semantics |
 |---|---|---|
-| 0, 3, 41, 1000–9999 | regular | stored, all versions kept |
-| 10000–19999 (incl. 0, 3) | replaceable | per pubkey+kind, keep newest only |
+| 1, 2, 4–44, and 1000–9999 | regular | stored, all versions kept |
+| 0, 3, and 10000–19999 | replaceable | per pubkey+kind, keep newest only (same `created_at`: lowest id wins) |
 | 20000–29999 | ephemeral | never stored, live-only |
-| 30000–39999 (incl. 2, 41) | addressable | per pubkey+kind+`d` tag, keep newest |
+| 30000–39999 | addressable | per pubkey+kind+`d` tag, keep newest |
 
-n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
+Kind 0 and kind 3 are replaceable, not regular. Kind 2 and kind 41 are regular, not addressable. Kinds 45–999 and 40000–65535 have no NIP-01 storage class. Rechecked against NIP-01 on 31 Oct 2026.
 
 ## Regular kinds
 
@@ -22,11 +22,11 @@ n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
 | 4 | legacy encrypted DM — DO NOT USE (NIP-17 instead) |
 | 5 | deletion request (NIP-09; `e`/`a`/`k` tags) |
 | 6 | repost of kind 1 · **7** reaction (`+`/`-`/emoji) · **8** badge award |
-| 9 | group chat message (NIP-29) · **10** group threaded reply · **11** group thread / community post (NIP-72) · **12** group reply |
+| 9 | chat message (NIP-C7, per the NIPs README). NIP-29 groups use the 9000s and 39000s, not kind 9. Confirm with `nostr-nips` before writing a client |
 | 13 | seal (NIP-59) · **14** DM rumor base kind (unsigned, inside seal) |
 | 16 | generic repost (any kind) |
 | 17 | reaction to a website |
-| 20 | picture (first-clients) · **21** video normal · **22** short video (NIP-71) |
+| 20 | picture-first (NIP-68) · **21** video · **22** short video (NIP-71) · **11** forum thread (NIP-7D). NIP-72 communities are unrecommended |
 | 40–43 | NIP-28 channels (dead) |
 | 62 | request to vanish (NIP-62) |
 | 1063 | file metadata (NIP-94: url, m mime, x sha256, size, dim) |
@@ -37,7 +37,7 @@ n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
 | 1986 | relay reviews (niche) · **1987** AI embeddings (niche) |
 | 2003 | torrent (NIP-35) · **2022** coinjoin (niche) |
 | 4550 | community post approval (NIP-72) |
-| 5000–5999 | DVM job requests (NIP-90: 5050 text gen, 5100-5199 misc, 5200-5299 image/video, 5300+ discovery) |
+| 5000–5999 | DVM job requests (NIP-90, unrecommended). Result kind = request + 1000. Exact job kinds live in `nostr-protocol/data-vending-machines`, not in this table |
 | 6000–6999 | DVM results · **7000** DVM feedback (payment-request, status) |
 | 9000–9030 | NIP-29 group moderation (put-user, remove-user, edit-metadata, delete-event, create/delete group...) |
 | 9734 | zap request · **9735** zap receipt (NIP-57) |
@@ -72,7 +72,7 @@ n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
 | 30015 | interest sets (alt) · **30017** stall / **30018** product (NIP-15, dead) |
 | 30023 | long-form article (NIP-23; `title`, `image`, `summary`, `published_at`) |
 | 30024 | draft long-form · **30030** emoji sets (alt) · **30040** curated publication index · **30041** publication content |
-| 30063 | release artifact sets (NIP-34) · **30078** app-specific data (NIP-78) |
+| 30063 | release artifact sets (NIP-51 in the NIPs README) · **30078** app-specific data (NIP-78). Kind 78 is also listed as application-specific data |
 | 30166 | relay discovery (NIP-66: `["d", relay-url]` + NIP-11 fields) |
 | 30267 | app curation sets · **30311** live event (NIP-53) · **30312** interactive room (niche) · **30315** user status (NIP-38) |
 | 30383 | NIP-85 trusted-assertion provider events |
@@ -86,7 +86,7 @@ n=2 and n=41 exceptions aside: 0 metadata and 3 contacts are *replaceable*.
 
 ## Tag conventions worth memorizing
 
-- `e` (event ref): `["e", id, relayHint?, marker?]` — markers: `root`/`reply`/`mention` (NIP-10)
+- `e` (event ref): NIP-10 marked form `["e", id, relayHint, "root"|"reply", authorPubkey?]`. A plain NIP-01 `e` tag is `["e", id, relayHint?, authorPubkey?]` with no marker word. `mention` is not a current NIP-10 marker; cite with a `q` tag (NIP-10).
 - `p` (pubkey ref): `["p", hex, relayHint?, petname?]`
 - `a` (address ref): `["a", "kind:pubkey:d-identifier", relayHint?]`
 - `d`: identifier for addressable events · `t`: hashtag (lowercase)

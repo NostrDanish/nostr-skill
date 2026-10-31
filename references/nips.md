@@ -1,4 +1,4 @@
-# NIP guide — which spec to reach for (status as of Sep 2026)
+# NIP guide — which spec to reach for (rechecked 31 Oct 2026)
 
 Canonical source: https://github.com/nostr-protocol/nips — check it for anything
 not listed here; new NIPs appear constantly and statuses change.
@@ -18,25 +18,29 @@ not listed here; new NIPs appear constantly and statuses change.
 | 44 | Versioned encryption (ChaCha20 + HKDF + HMAC, conversation key from ECDH) | Use for all new private payloads |
 | 17 | Private DMs = NIP-44 sealed kinds 13/14 inside NIP-59 gift wraps (kind 1059) | Replaces NIP-04; hides metadata via random timestamps |
 | 57 | Lightning zaps (kinds 9734 request / 9735 receipt, lud16 LNURL flow) | Verify receipt's bolt11 against the invoice; receipts are forgeable otherwise |
-| 98 | HTTP auth: kind 27235 event in `Authorization: Nostr <base64>` header | For APIs, Blossom, NIP-96-era servers |
+| 98 | HTTP auth: kind 27235 event in `Authorization: Nostr <base64>` header | For your own HTTP APIs. Blossom auth is BUD-11 (kind 24242, base64url), not this |
 
 ## Common features
 
 - **02** contact list (kind 3, petnames) · **09** deletion requests (kind 5) · **11** relay info document (`Accept: application/nostr+json`)
 - **13** proof of work (`nonce` tag) · **14** subject tag · **21** `nostr:` URI scheme · **22** comments (kind 1111, uppercase/lowercase tag pairs)
 - **23** long-form markdown (kind 30023, `d` tag) · **24** extra profile fields · **27** inline `nostr:` references
-- **29** relay-based groups (kinds 9000s admin, 39000s metadata; chat kind 9/10/11/12) · **30** custom emoji (`emoji` tag + kind 10030/30030)
+- **29** relay-based groups (admin kinds in the 9000s, metadata in the 39000s). Kind 9 is NIP-C7 chat, not NIP-29. · **30** custom emoji (`emoji` tag + kind 10030/30030)
 - **32** labels (kind 1985, `L`/`l` tags) · **34** git over nostr (repos kind 30617, patches 1617, PRs 1618, issues 1621) · **36** sensitive content (`content-warning`)
 - **37** drafts (kind 31234, NIP-44 encrypted to self) · **38** user statuses (kind 30315) · **40** expiration (`expiration` tag)
 - **42** client→relay auth (kind 22242) · **45** `["COUNT", ...]` · **46** Nostr Connect remote signing (`bunker://`, kind 24133)
 - **47** Nostr Wallet Connect (kinds 13194/23194-23197) · **50** search (`search` filter field, relay-optional)
 - **51** lists: mute/pin/bookmarks/relays/interests (kinds 10000-10003 standard, 30000-30003 sets, follow sets 30000) · **52** calendar (kinds 31922-31925)
 - **53** live activities (kind 30311, chat 1311) · **56** reports (kind 1984) · **58** badges (30009/8/30008)
-- **59** gift wrapping (kind 1059, random timestamp ±2 days) · **62** right to vanish (kind 62) · **70** protected events (`-` tag, relay-gated)
-- **71** video events (kinds 21/22, `imeta` tag) · **72** moderated communities (kind 34550, posts 11 with `a` tag) · **73** external content IDs
-- **75** zap goals (kind 9041) · **78** app data (kind 30078) · **84-87** highlights/curation · **86** relay management API (kind 13534 etc.)
-- **88** NUT-zaps (Cashu ecash) · **89** recommended app handlers (kinds 31989/31990) · **90** data vending machines (kinds 5000-5999 requests, 6000-6999 results)
-- **94** file metadata (kind 1063) · **99** classified listings (kind 30402) · **A0** voice messages · **B7** Blossom media servers · **C0** code snippets · **C7** chats (kind 9-based) · **F4** podcasts
+- **59** gift wrapping (kind 1059, random timestamp ±2 days)
+- **60** Cashu wallet · **61** nutzaps (not NIP-88) · **62** right to vanish (kind 62) · **64** chess (PGN) · **65** relay list, already above
+- **68** picture-first (kind 20) · **70** protected events (`-` tag) · **71** video (kinds 21/22) · **72** moderated communities — **unrecommended**, use NIP-29 · **73** external content IDs
+- **75** zap goals · **77** negentropy sync · **78** app data (kind 30078, and kind 78) · **84** highlights · **85** trusted assertions · **86** relay management API · **87** Cashu and Fedimint discovery
+- **88** polls · **89** recommended app handlers (kinds 31989/31990) · **90** data vending machines — **unrecommended** ("prefer use-case-specific microstandards"). Result kind = request kind + 1000; feedback is kind 7000
+- **92** `imeta` media tags · **94** file metadata (kind 1063) · **99** classified listings (kind 30402)
+- **A0** voice messages · **A4** public messages (kind 24) · **B7** Blossom · **C0** code snippets · **C7** chats (kind 9) · **7D** forum threads (kind 11) · **F4** podcasts
+
+The lines above are a map. `python3 scripts/nip.py kind <n>` in the nostr-nips skill wins when they disagree.
 
 ## Deprecated / unrecommended — do NOT build on these
 
@@ -48,8 +52,10 @@ not listed here; new NIPs appear constantly and statuses change.
 | 15 | Marketplace (stalls/products) | **NIP-99** classifieds |
 | 26 | Delegated event signing | NIP-46 remote signing |
 | 28 | Public chat channels | **NIP-29** groups |
+| 72 | Moderated communities | **NIP-29** |
+| 90 | Data vending machines | a purpose-specific kind; see the `nostr-dvm` skill only for interop |
 | 03, 31 | OpenTimestamps, unknown-event `alt` handling | (niche; NIP-31's `alt` convention still widely used informally) |
-| 96 | HTTP file storage | **Blossom (NIP-B7)** |
+| 96 | HTTP file storage | **Blossom (NIP-B7 / BUDs)** |
 | EE | MLS E2EE messaging | **Marmot Protocol** (MDK) |
 
 ## Key management guidance

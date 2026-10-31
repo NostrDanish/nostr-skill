@@ -35,7 +35,7 @@ Relay Runner (relayrunner.org) has per-implementation step-by-step guides — co
 
 ## NIP-42 auth flow (implement/enforce)
 
-Relay sends `["AUTH", "<challenge>"]` on connect or on restricted REQ/EVENT. Client replies `["EVENT", {kind: 22242, tags: [["relay", relay-url], ["challenge", challenge]], ...}]`. Relay validates sig, `relay` tag matches its own URL, challenge matches, `created_at` recent. Use `["OK", id, false, "auth-required: ..."]` / `["CLOSED", sub, "auth-required: ..."]` to trigger it on demand.
+Relay sends `["AUTH", "<challenge>"]` on connect or before a restricted REQ/EVENT. Client replies `["AUTH", <signed kind-22242 event>]` — not `["EVENT", ...]`. Tags are `["relay", <url>]` and `["challenge", <challenge>]`, `created_at` is about now (relays typically allow ~10 minutes). The relay answers that AUTH with `OK`. `auth-required:` on `OK` or `CLOSED` means the client must AUTH and then retry the original REQ or EVENT. `restricted:` means AUTH succeeded and this pubkey is still not allowed.
 
 ## Management & moderation
 

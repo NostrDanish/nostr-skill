@@ -65,12 +65,15 @@ Flow per message: rumor (unsigned kind 14, real timestamp) → NIP-44-encrypt in
 5. Receiver's LNURL server publishes kind 9735 receipt to the `relays` tag.
 6. **Display rule**: a receipt is only proof if bolt11 paid AND receipt pubkey == recipient's lnurl `nostrPubkey`. Otherwise show as "unverified".
 
-## Media upload (Blossom, NIP-B7)
+## Media upload (Blossom)
 
-1. sha256 the file; build kind 24242 auth event (`t` tag = `upload`, `x` tag = hash, `expiration`).
-2. `PUT https://<blossom-server>/upload` with body = file, header `Authorization: Nostr <base64(auth-event)>`.
-3. Response gives URL (usually `/<sha256>.<ext>`). Reference in notes directly, or in kind 1063/`imeta` tags.
-Servers: blossom servers are per-user (kind 10063 server list). Legacy NIP-96 hosts still exist; treat Blossom as default.
+Use the `blossom` skill. The short version, matching BUD-02 and BUD-11 (31 Oct 2026):
+
+1. SHA-256 the exact bytes. Kind 24242 auth event: human-readable `content`, `t` = `upload`, `expiration` in the future, `x` = that hash (required for `PUT /upload`). Optional `server` tag is a lowercase domain, not a URL.
+2. `PUT https://<server>/upload` with the raw bytes. Header is `Authorization: Nostr <base64url-without-padding of the signed event>`. Also send `Content-Type`, `Content-Length`, and `X-SHA-256`.
+3. 201 is a new blob, 200 means the server already had it. The JSON descriptor's `sha256` must equal the hash you sent. Put that `url` in the note or in a kind 1063 / `imeta` tag.
+
+Kind 10063 is the user's server list (BUD-03). `GET /list/<pubkey>` is unrecommended. NIP-96 is not the default. NIP-98 uses ordinary base64; Blossom does not.
 
 ## NIP-98 HTTP auth for your own API
 
