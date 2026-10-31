@@ -15,8 +15,8 @@ Companion skills, each in its own repo:
 
 - [`nostr-nips`](https://github.com/NostrDanish/nostr-nips-skill) — fetch the current NIP text
 - [`nak`](https://github.com/NostrDanish/nak-skill) — the nak CLI
-- [`blossom`](https://github.com/NostrDanish/blossom-skill) — Blossom media
-- [`nwc`](https://github.com/NostrDanish/nwc-skill) — Nostr Wallet Connect
+- `blossom` — Blossom media (own repo; not part of this one)
+- `nwc` — Nostr Wallet Connect (own repo; not part of this one)
 - [`sip-01`](https://github.com/SIP-01/sip-01-skill) — kind 39697 web index
 
 ## Install
