@@ -1,7 +1,17 @@
-# NIP guide — which spec to reach for (status as of Sep 2026)
+# NIP guide — which spec to reach for (status snapshot reviewed 2026-11-11; canonical upstream NIPs revision b587c619c2ea662d40b40976aeccf6ac8d6ba9eb)
 
 Canonical source: https://github.com/nostr-protocol/nips — check it for anything
 not listed here; new NIPs appear constantly and statuses change.
+
+## Result completeness — NIP-67
+
+The canonical NIPs repository now includes NIP-67 (draft), EOSE Completeness Hint. NIP-01 EOSE separates stored events from subsequent live events; it does not prove the relay returned every stored event matching the filter.
+
+- finish: definitive signal that the relay sent every stored matching event.
+- more: the relay holds additional stored matching events; paginate.
+- auth: additional matches may become available after NIP-42 AUTH.
+
+Ignore unknown hint values. When no definitive finish hint is present, report completeness as unknown. If a query times out, closes or errors before EOSE, report partial or failed results. Source: https://github.com/nostr-protocol/nips/blob/master/67.md
 
 ## The essential dozen (implement these first)
 
@@ -11,7 +21,7 @@ not listed here; new NIPs appear constantly and statuses change.
 | 19 | bech32 entities: npub/nsec/note/nprofile/nevent/naddr | bech32, NOT bech32m |
 | 05 | DNS identifiers (`alice@domain.com` → pubkey via `/.well-known/nostr.json`) | Verification is one-way; don't treat as strong identity |
 | 07 | `window.nostr` browser extension signing | Default signer for web apps |
-| 10 | Threading: `e`/`p` tag conventions (root/reply/mention markers) | Positional `#[n]` mentions (NIP-08) are dead — use NIP-27 |
+| 10 | Threading: `e`/`p` tag conventions (root/reply/mention markers) | NIP-08 is unrecommended/deprecated for mentions; use NIP-27 text-note references |
 | 25 | Reactions (kind 7, `+`/`-`/emoji) | |
 | 18 | Reposts (kind 6, generic repost kind 16) | |
 | 65 | Relay list metadata (kind 10002, r/w markers) — the **outbox model** | The backbone of relay selection |
