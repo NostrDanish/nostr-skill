@@ -2,9 +2,9 @@
 """Nostr relay inspector with bounded NIP-67 completeness handling.
 
 Query emits one JSON object containing events and completeness metadata.
-Explicit NIP-67 "more" hints are paginated with an until cursor (up to 10 pages
-by default). Only "finish" marks the result complete. Unknown EOSE hints,
-AUTH requirements, timeouts, CLOSED and pagination failures are not complete.
+Explicit NIP-67 "more" hints and legacy/unknown EOSE hints use bounded until
+pagination (up to 10 pages by default). Only "finish" marks the result complete.
+AUTH requirements, timeouts, CLOSED and pagination failures remain incomplete.
 """
 
 from __future__ import annotations
