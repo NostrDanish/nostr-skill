@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Small Nostr relay inspector.
+"""Nostr relay inspector with bounded NIP-67 completeness handling.
 
-Query results include explicit completeness metadata. An EOSE without NIP-67's
-"finish" hint is not reported as complete. This client does not paginate a
-NIP-67 "more" response; it labels the result as incomplete instead.
+Query emits one JSON object containing events and completeness metadata.
+Explicit NIP-67 "more" hints are paginated with an until cursor (up to 10 pages
+by default). Only "finish" marks the result complete. Unknown EOSE hints,
+AUTH requirements, timeouts, CLOSED and pagination failures are not complete.
 """
+
 from __future__ import annotations
 import asyncio
 import json
