@@ -16,7 +16,7 @@ The included `scripts/nostr_key.py` is now a public-only NIP-19 codec. It handle
 
 Use NIP-07, NIP-46 or a maintained, reviewed cryptographic library behind a dedicated signer. Never pass an nsec through command-line arguments, shell history, model context, logs or ordinary stdout.
 
-The relay query helper reports completeness explicitly. EOSE without a NIP-67 `finish` hint is unknown; `more` means additional stored results are available; `auth` may require NIP-42 authentication; and timeouts/CLOSED are not complete results.
+The relay query helper reports completeness explicitly and paginates `more` hints using an `until` cursor, with a 10-page safety limit. EOSE without a NIP-67 `finish` hint is unknown; `auth` may require NIP-42 authentication; repeated pages, timeouts/CLOSED and page-limit stops are incomplete.
 
 ## Contents
 
@@ -24,7 +24,7 @@ The relay query helper reports completeness explicitly. EOSE without a NIP-67 `f
 - `references/` — client development, kinds, NIPs and relay operations.
 - `scripts/nostr_key.py` — public-only NIP-19 codec.
 - `scripts/nostr_query.py` — relay query/publish and NIP-11 inspection.
-- `tests/test_nostr_key.py` — public NIP-19 safety regression tests.
+- `tests/test_nostr_key.py` — public NIP-19 safety regression tests.\n- `tests/test_nostr_query.py` — mocked relay tests for NIP-67 pagination and partial results.
 
 ## Tests
 
