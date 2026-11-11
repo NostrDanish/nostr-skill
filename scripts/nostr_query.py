@@ -48,12 +48,15 @@ async def query(relay: str, filter_json: str, timeout: float = 15.0) -> dict:
                     result["eose"] = True
                     hints = msg[2] if len(msg) > 2 and isinstance(msg[2], list) else []
                     result["eose_hints"] = [str(hint) for hint in hints]
-                    if "finish" in hints:
-                        result["completeness"] = "complete"
-                        result["complete"] = True
+                    if "auth" in hints:
+                        result["completeness"] = "auth-required"
+                        result["error"] = "relay indicates additional results may require NIP-42 AUTH"
                     elif "more" in hints:
                         result["completeness"] = "more-available"
                         result["error"] = "relay indicates additional stored events; pagination is not implemented"
+                    elif "finish" in hints:
+                        result["completeness"] = "complete"
+                        result["complete"] = True
                     else:
                         result["completeness"] = "unknown"
                         result["error"] = "EOSE received without a definitive NIP-67 finish hint"
