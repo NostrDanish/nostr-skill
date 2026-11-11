@@ -65,6 +65,24 @@ class NostrQueryCompletenessTests(unittest.TestCase):
         self.assertFalse(result["complete"])
         self.assertEqual(result["completeness"], "unknown")
 
+    def test_plain_and_unknown_hints_use_legacy_pagination(self):
+        first = {"id": "event-1", "created_at": 100}
+        second = {"id": "event-2", "created_at": 90}
+        ws = FakeWebSocket([
+            [["EVENT", "q-0", first], ["EOSE", "q-0"]],
+            [["EVENT", "q-1", second], ["EOSE", "q-1", ["future-hint"]]],
+            [["EOSE", "q-2"]],
+        ])
+        with patch.object(nostr_query.websockets, "connect", return_value=ws):
+            result = asyncio.run(nostr_query.query("wss://relay.example", '{"kinds":[1]}'))
+        self.assertFalse(result["complete"])
+        self.assertFalse(result["partial"])
+        self.assertEqual(result["completeness"], "unknown")
+        self.assertEqual(result["pages"], 3)
+        self.assertEqual(result["event_count"], 2)
+        self.assertEqual(ws.sent[1][2]["until"], 100)
+        self.assertEqual(ws.sent[2][2]["until"], 90)
+
     def test_duplicate_only_more_page_stops_partial(self):
         event = {"id": "same-event", "created_at": 100}
         ws = FakeWebSocket([
