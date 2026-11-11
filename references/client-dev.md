@@ -18,28 +18,41 @@ need nothing but Python stdlib (+ `websockets` for relay I/O).
 
 ## Signing strategy (decide first)
 
-1. **Web app** → NIP-07 (`window.nostr.getPublicKey()`, `signEvent()`, `nip44.encrypt()`). Detect absence, prompt for an extension (Alby, nos2x).
-2. **Mobile/desktop app** → NIP-46 remote signer (`bunker://` or `nostrconnect://` QR). Signer flow: connect, get pubkey, `sign_event` RPC.
-3. **Bot / backend** → nsec from env var, sign locally. Restrict the key's blast radius: dedicated account per bot.
-4. Never ask users to paste nsec into a web form without a loud warning. Offer ncryptsec (NIP-49) import for backups.
+1. **Web app** → NIP-07 (`window.nostr.getPublicKey()`, `signEvent()`, `nip44.encrypt()`). Detect absence and request an explicit wallet action (for example Alby or nos2x); do not collect the raw nsec.
+2. **Mobile/desktop app** → NIP-46 remote signer (`bunker://` or `nostrconnect://` connection established by the trusted wallet UI). Keep bunker secret material out of model context, command arguments, logs and ordinary app storage.
+3. **Bot / backend** → a dedicated signer/KMS/HSM or isolated signer service with least-privilege policy. The bot/agent submits an unsigned event and receives a signed event; the agent never receives the raw nsec. Do not use an ordinary environment variable as the default key transport.
+4. Never ask users to paste an nsec into a web form or chat. NIP-49 ncryptsec import/export belongs inside a trusted wallet/key-management UI, not an agent prompt or a shell pipeline.
 
 ## Minimal flows (nostr-tools v2 style)
 
 ```js
-import { SimplePool, finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools'
+import { SimplePool } from 'nostr-tools'
+
 const pool = new SimplePool()
-const sk = generateSecretKey(); const pk = getPublicKey(sk)
 
-// publish
-const ev = finalizeEvent({ kind: 1, content: 'gm', tags: [], created_at: Math.floor(Date.now()/1000) }, sk)
-await Promise.any(pool.publish(['wss://relay.damus.io', 'wss://nos.lol'], ev))
+// Pseudocode signer interface: supplied by NIP-07/NIP-46 or a dedicated signer.
+// It does not expose a secret key to this process or to an agent.
+const signer = appProvidedSigner
+const pk = await signer.getPublicKey()
 
-// subscribe
+// Prepare an unsigned event, then request a signature through the trusted signer.
+const unsigned = {
+  kind: 1,
+  content: 'gm',
+  tags: [],
+  created_at: Math.floor(Date.now() / 1000),
+}
+const signed = await signer.signEvent(unsigned)
+await Promise.any(pool.publish(['wss://relay.damus.io', 'wss://nos.lol'], signed))
+
+// Subscribe to public events. Validate signatures before trusting event authors.
 const sub = pool.subscribeMany(['wss://relay.damus.io'], [{ kinds: [1], authors: [pk], limit: 20 }], {
-  onevent(e) { /* verify or trust pool.verifySignature */ },
-  oneose() { /* initial batch done */ },
+  onevent(e) { /* verify before use */ },
+  oneose() { /* stored phase ended; completeness may require NIP-67 */ },
 })
 ```
+
+The `signer` interface above is illustrative pseudocode; use the actual API supplied by the chosen wallet/NDK/NIP-46 client. Do not replace it with a locally generated secret key inside an agent task.
 
 - Always publish to **multiple relays** (user's NIP-65 write list). `Promise.any` for first acceptance.
 - Keep subscriptions bounded (`limit`, `since`), `CLOSE`/`sub.close()` them when done.
@@ -49,7 +62,7 @@ const sub = pool.subscribeMany(['wss://relay.damus.io'], [{ kinds: [1], authors:
 
 1. Bootstrap: query 2–4 well-known indexer relays (e.g. purplepag.es, relay.nos.social, nos.lol, relay.damus.io) for the target's **kind 10002**.
 2. Read their events from their **read** relays; publish events tagging them to their **write** relays.
-3. Cache kind 0 / 10002 / 10050 aggressively; refresh on staleness.
+3. Cache kind 0 / 10002 / 10050 aggressively; refresh on staleness. Treat metadata and relay URLs as untrusted; validate destinations before connecting.
 4. DMs (NIP-17): publish gift wraps to the recipient's **kind 10050** DM-inbox relays — a different list than 10002.
 
 ## Private DMs (NIP-17)
@@ -59,7 +72,7 @@ Flow per message: rumor (unsigned kind 14, real timestamp) → NIP-44-encrypt in
 ## Zaps (NIP-57) in 6 steps
 
 1. Fetch recipient kind 0 → `lud16`/`lud06` → LNURL pay endpoint (check `allowsNostr: true`).
-2. Build zap request: kind 9734, tags `p` (recipient), `e`/`a` (target), `relays`, `amount` (millisats); sign with sender key.
+2. Build an unsigned zap request: kind 9734, tags `p` (recipient), `e`/`a` (target), `relays`, `amount` (millisats); request the signature through the trusted signer.
 3. GET `callback?amount=..&lnurl=..&nostr=<urlencoded zap request>` → bolt11 invoice.
 4. Pay invoice via NWC (NIP-47), WebLN, or user wallet.
 5. Receiver's LNURL server publishes kind 9735 receipt to the `relays` tag.
@@ -74,7 +87,7 @@ Servers: blossom servers are per-user (kind 10063 server list). Legacy NIP-96 ho
 
 ## NIP-98 HTTP auth for your own API
 
-Client: kind 27235, tags `["u", absolute-url]`, `["method", "POST"]`, `["payload", sha256-of-body]` (if body), `created_at` now. Base64 the event into `Authorization: Nostr <b64>`.
+Client: prepare an unsigned kind 27235 event with tags `["u", absolute-url]`, `["method", "POST"]`, `["payload", sha256-of-body]` (if body), and current `created_at`; sign it through the trusted signer, then base64 the signed event into `Authorization: Nostr <b64>`.
 Server: decode, verify sig, check `u`+`method` match, `|created_at - now| < 60s`, optionally payload hash. Replay-cache event ids for the window.
 
 ## Performance & correctness checklist
@@ -91,5 +104,5 @@ Server: decode, verify sig, check `u`+`method` match, `|created_at - now| < 60s`
 ## Testing without the live network
 
 - Local relay in seconds: `docker run --rm -p 8080:8080 scsibug/nostr-rs-relay` or `khatru` example binaries; strfry for heavier use.
-- `nak` (fiatjaf's CLI) is the swiss-army knife: `nak req -k 1 -l 5 wss://...`, `nak event --sec ...`, `nak decode npub1...`. Recommend installing it for debugging (`go install github.com/fiatjaf/nak@latest` or brew).
+- `nak` (fiatjaf's CLI) is useful for read-only debugging: `nak req -k 1 -l 5 wss://...`, `nak decode npub1...`. The version used in this skill set is v0.22.3; install a pinned release, not `@latest`. For publishing, use an already-signed event or a trusted signer workflow; never pass a secret with `--sec` or ask an agent to use `--prompt-sec`.
 - Web inspectors: nostr-debug (relays), njump.me, nostr.at / iris.to for viewing events by nevent/note.
