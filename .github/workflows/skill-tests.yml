@@ -37,6 +37,8 @@ jobs:
             if [ -d "$dir" ]; then cp -R "$dir" "$RUNNER_TEMP/skill-root/nostr/$dir"; fi
           done
           skills-ref validate "$RUNNER_TEMP/skill-root/nostr"
+      - name: Install relay query dependency
+        run: python -m pip install "websockets>=12,<16"
       - name: Compile Python helpers
         run: python -m py_compile scripts/nostr_key.py scripts/nostr_query.py
       - name: Run public NIP-19 safety tests
