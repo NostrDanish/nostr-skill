@@ -1,43 +1,65 @@
 ---
 name: nostr
-description: Build, debug, and operate anything on the Nostr protocol. Use whenever the task involves Nostr clients, bots, relays, or keys — publishing/signing/verifying events, generating or converting keys (npub/nsec/note/nevent/naddr/nprofile), querying relays with NIP-01 filters, choosing the right NIP for a feature (DMs NIP-17, zaps NIP-57, groups NIP-29, long-form NIP-23, lists NIP-51, outbox model NIP-65, Blossom media), setting up a relay (strfry, khatru, nostr-rs-relay), NIP-07 browser signing, NIP-46 remote signers, NIP-98 HTTP auth, or decoding any bech32 nostr identifier. Triggers on "nostr", NIP numbers, relay URLs (wss://), and npub1/nsec1/note1/nevent1/naddr1 strings.
+description: Build, debug and operate Nostr clients, bots, relays and applications. Use for NIP-01 events and relay filters, public NIP-19 identifiers, NIP-07 and NIP-46 signing integration, relay operations, NIP-98 HTTP authentication and selecting NIPs for a concrete feature. Do not use for a simple request to look up the current wording or status of a NIP; use the nostr-nips companion skill for source-first specification research.
 ---
 
-# Nostr
+# Nostr engineering skill
 
-## Core model (memorize this, everything follows)
+## Activation and scope
 
-- An **event** is JSON: `{id, pubkey, created_at, kind, tags, content, sig}`. `id` = sha256 of `[0, pubkey, created_at, kind, tags, content]` serialized UTF-8 with no whitespace. `sig` = BIP340 Schnorr over the id.
-- **Kinds**: 0 metadata, 1 short note, 3 contacts, 4 legacy DM (avoid), 6/16 reposts, 7 reaction, 9735 zap receipt, 10002 relay list, 30023 long-form. Full table: [references/kinds.md](references/kinds.md).
-- Kind ranges define lifecycle: regular (stored forever), **replaceable** (10000–19999: newest per pubkey+kind wins), **ephemeral** (20000–29999: not stored), **addressable/parameterized replaceable** (30000–39999: newest per pubkey+kind+`d`-tag wins).
-- **Wire protocol** (client→relay): `["EVENT", ev]`, `["REQ", sub_id, filter...]`, `["CLOSE", sub_id]`, `["AUTH", ev]`. Relay→client: `["EVENT", sub_id, ev]`, `["EOSE", sub_id]`, `["OK", id, bool, msg]`, `["NOTICE", msg]`, `["CLOSED", sub_id, msg]`, `["COUNT", ...]`, `["AUTH", challenge]`.
-- Filters: `ids`, `authors`, `kinds`, `#<letter>` tag filters, `since`/`until`, `limit`, `search` (NIP-50). `ids`/`authors` accept hex prefixes.
+Use this skill when implementing or operating Nostr clients, backends, bots, relays, event workflows, signers or relay queries.
+
+Do not activate solely because a task mentions a NIP number or asks for the current status/text of a NIP. Use the companion nostr-nips skill for current specification research. Do not infer a protocol requirement from an implementation-specific behavior.
+
+## Core event model
+
+A Nostr event contains id, pubkey, created_at, kind, tags, content and sig. The event id is the SHA-256 hash of the NIP-01 serialized array [0, pubkey, created_at, kind, tags, content]. The signature is a BIP-340 Schnorr signature over the event id.
+
+Important kinds include metadata (0), short text note (1), contacts (3), legacy DM (4), reposts (6/16), reaction (7), zap receipt (9735), relay list metadata (10002) and addressable long-form content (30023). Check references/kinds.md rather than guessing a kind.
+
+Kind ranges: regular (stored as ordinary events), replaceable (10000–19999), ephemeral (20000–29999) and addressable/parameterized replaceable (30000–39999). For addressable events, the d tag participates in the replaceable address.
+
+Client-to-relay messages include EVENT, REQ, CLOSE and AUTH. Relay-to-client messages include EVENT, EOSE, OK, NOTICE, CLOSED, COUNT and AUTH. NIP-01 filters support ids, authors, kinds, single-letter tag filters, since, until, limit and optional search capability.
 
 ## Task routing
 
-| Task | Do this |
+| Task | Procedure |
 |---|---|
-| Generate keys, convert npub/nsec/note, decode any bech32, sign/verify an event, NIP-44 encrypt/decrypt | Run `scripts/nostr_key.py` (zero dependencies — see header for CLI) |
-| One-off relay query, publish a signed event, fetch NIP-11 relay doc | Run `scripts/nostr_query.py` (needs `pip install websockets`) |
-| Build a client/bot/app, pick libraries, signers, subscriptions, DMs, zaps, media upload | Read [references/client-dev.md](references/client-dev.md) |
-| Decide which NIP to use, check if a NIP is deprecated | Read [references/nips.md](references/nips.md) |
-| Look up an event kind number or tag convention | Read [references/kinds.md](references/kinds.md) |
-| Install/configure/secure a relay | Read [references/relay-ops.md](references/relay-ops.md) |
+| Encode/decode public NIP-19 references | Use scripts/nostr_key.py for npub, note, nprofile, nevent and naddr only. |
+| Sign events or encrypt/decrypt NIP-44 | Use NIP-07, NIP-46 or a maintained, reviewed cryptographic library behind a dedicated signer. Never pass a secret key to a command-line argument or model context. |
+| Query/publish to a relay or read NIP-11 | Use scripts/nostr_query.py; interpret its completeness field before treating a query as exhaustive. |
+| Build a client, bot or app | Read references/client-dev.md. |
+| Select a NIP or check deprecation/status | Read references/nips.md, then verify against the live canonical NIPs repository. |
+| Look up event kinds or tag conventions | Read references/kinds.md and the current canonical NIPs source. |
+| Install/configure/secure a relay | Read references/relay-ops.md. |
 
-## Non-negotiable rules
+## Key custody and signing — mandatory security boundary
 
-1. **The nsec IS the account.** Never log it, commit it, send it to any server/relay, or ask the user to paste it where it isn't needed. Web clients use NIP-07 (`window.nostr`) or NIP-46 remote signers; only bots/backends hold nsecs, in env vars.
-2. **Never hand-roll crypto for production apps** — use the audited libraries in client-dev.md. `scripts/nostr_key.py` is stdlib-only for portability (great for tooling, key conversion, verifying, one-off signing); it passes all official BIP340 and NIP-44 test vectors but is not constant-time.
-3. **NIP-04 is dead, NIP-96 is dead.** DMs = NIP-17 (NIP-44 encryption + NIP-59 gift wrap). Media = Blossom. Deprecated NIPs with their replacements: [references/nips.md](references/nips.md).
-4. **Publish to the user's write relays, read from their read relays** (NIP-65 kind-10002 lists). Querying only one big relay is the #1 client bug. Fetch relay lists from a few indexer relays first.
-5. **Verify before trusting**: check `id` matches the serialization and `sig` verifies, especially for kind 0/3/10002 and anything driving payments (zap receipts: verify the invoice actually paid — the event alone proves nothing).
-6. **Replaceable ≠ deleted.** Updating kind 0/3 or an addressable event leaves the old version on some relays. NIP-09 deletion is a *request*; relays may honor it, mirrors won't.
-7. `created_at` is client-supplied and untrusted. Use it for display ordering, never for security decisions.
+1. A secret nsec is account authority. Never ask the user to paste it into chat, store it in a skill, commit it, print it, log it, or put it in command-line arguments or shell history.
+2. Do not use environment variables as the default secret transport for interactive agent work. Process environments may be exposed through diagnostics, crash reports or process inspection.
+3. Browser clients should request signatures through NIP-07 or a wallet-provided signer. Cross-device/backend workflows should use NIP-46 or a dedicated signer/KMS/HSM with least-privilege policy and explicit authorization.
+4. The agent may prepare and validate an unsigned event. It must not obtain or retain the signing secret. Require explicit user approval before publishing public or consequential events.
+5. The previous custom pure-Python secp256k1/BIP-340 and NIP-44 implementation has been removed from scripts/nostr_key.py. The replacement utility only handles public NIP-19 identifiers and deliberately rejects nsec. Do not reintroduce private-key operations there.
+6. Never describe a self-written cryptographic implementation as production safe because it passes test vectors. Secret-key operations require maintained, reviewed libraries and appropriate signer isolation.
 
-## Quick sanity checks while coding
+## Protocol correctness rules
 
-- Event id must be recomputed from fields, never trusted from input.
-- `tags` is an array of arrays, not an object: `[["p", "<hex>"], ["e", "<id>", "<relay-hint>", "reply"]]`.
-- bech32 (not bech32m) for all NIP-19 entities; npub/nsec/note are raw 32 bytes, nprofile/nevent/naddr are TLV.
-- WebSocket relays speak text frames of JSON arrays; send one filter per REQ element, multiple filters in one REQ are OR'd.
-- Subscription results are streaming: wait for `EOSE` before concluding a query is complete, and keep the sub open for live updates.
+1. Recompute and verify event ids and signatures before trusting event data. A syntactically valid event is not automatically an authentic or truthful statement.
+2. Treat kind 0, kind 3 and kind 10002 data as untrusted inputs. Validate schemas and relay URLs before using them.
+3. NIP-04 is final but unrecommended/deprecated in favor of NIP-17. NIP-96 is draft and unrecommended, with Blossom (NIP-B7) as its replacement. Preserve legacy interoperability when required; do not call these specifications nonexistent or universally unsupported.
+4. Use NIP-65 read/write relay metadata when appropriate. A single large relay is not a complete view of the network.
+5. Updating a replaceable event does not guarantee every relay or mirror has removed the prior version. A NIP-09 deletion event is a request, not a universal erase guarantee.
+6. created_at is supplied by the event author and must not be used as a security timestamp.
+7. NIP-01 EOSE ends the initial stored-event phase; EOSE alone does not prove that every stored match was sent. Where supported, interpret NIP-67 EOSE hints: finish means definitive stored-result completion, more means additional stored matches are available, and auth indicates that more may be available after AUTH. Ignore unknown hints. Without finish, report completeness as unknown. On timeout, CLOSED or connection failure, report partial/failed results rather than silently presenting them as complete.
+
+## Implementation checks
+
+- Tags are arrays of arrays, for example [["p", "<pubkey>"], ["e", "<event-id>", "<relay-hint>", "reply"]].
+- NIP-19 uses bech32, not bech32m. npub, nsec and note carry 32-byte values; nprofile, nevent and naddr use TLV records.
+- Multiple filters in one REQ are OR'd; do not assume AND semantics.
+- Validate event id and signature with a maintained implementation. Verify payment receipts against the payment system; a zap receipt event alone does not prove that an invoice was paid.
+- For relay search, check NIP-50 support and distinguish relay-specific search syntax from portable NIP-01 filtering.
+
+## Source hierarchy
+
+Use the canonical NIPs repository for specification status and normative wording, maintained implementations as secondary evidence, and articles/social posts only as supporting context. Record source URL, revision/date and whether a feature is draft, final, unrecommended, optional or implementation-specific when the distinction affects the implementation.
