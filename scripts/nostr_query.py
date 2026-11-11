@@ -17,14 +17,16 @@ import urllib.request
 import websockets
 
 def classify_eose_hints(hints: list[str]) -> tuple[str, str | None]:
-    """Classify NIP-67 EOSE hints. AUTH takes precedence over finish."""
+    """Classify NIP-67 hints; absent/unknown hints use legacy pagination."""
     if "auth" in hints:
         return "auth-required", "relay indicates additional results may require NIP-42 AUTH"
     if "more" in hints:
         return "more-available", None
     if "finish" in hints:
         return "complete", None
-    return "unknown", "EOSE received without a definitive NIP-67 finish hint"
+    # NIP-67 says unknown hints are ignored and their absence is not proof
+    # of completion. Fall back to bounded legacy until-pagination.
+    return "legacy", "no definitive NIP-67 hint; using bounded legacy pagination"
 
 
 async def query(relay: str, filter_json: str, timeout: float = 15.0, max_pages: int = 10) -> dict:
@@ -80,42 +82,54 @@ async def query(relay: str, filter_json: str, timeout: float = 15.0, max_pages: 
                         state, hint_error = classify_eose_hints(result["eose_hints"])
                         if state == "complete":
                             result["completeness"] = "complete"
-                        elif state == "unknown":
-                            result["completeness"] = "unknown"
-                            result["error"] = hint_error
                         elif state == "auth-required":
                             result["completeness"] = "auth-required"
                             result["partial"] = True
                             result["error"] = hint_error
                         else:
+                            legacy = state == "legacy"
                             if page_index + 1 >= max_pages:
                                 result["completeness"] = "pagination-limit"
                                 result["partial"] = True
                                 result["error"] = f"pagination stopped at the {max_pages}-page safety limit"
                             elif fresh_count == 0 or not page_events:
-                                result["completeness"] = "partial"
-                                result["partial"] = True
-                                result["error"] = "NIP-67 more hint received but pagination made no progress"
+                                result["completeness"] = "unknown" if legacy else "partial"
+                                result["partial"] = not legacy
+                                result["error"] = (
+                                    "legacy pagination found no additional unique events; completeness remains unknown"
+                                    if legacy else
+                                    "NIP-67 more hint received but pagination made no progress"
+                                )
                             else:
                                 timestamps = [
                                     int(event["created_at"]) for event in page_events
                                     if isinstance(event.get("created_at"), int)
+                                    and not isinstance(event.get("created_at"), bool)
+                                    and event["created_at"] >= 0
                                 ]
                                 if not timestamps:
-                                    result["completeness"] = "partial"
-                                    result["partial"] = True
-                                    result["error"] = "NIP-67 more hint received but no created_at cursor was available"
+                                    result["completeness"] = "unknown" if legacy else "partial"
+                                    result["partial"] = not legacy
+                                    result["error"] = (
+                                        "legacy pagination could not derive a created_at cursor"
+                                        if legacy else
+                                        "NIP-67 more hint received but no created_at cursor was available"
+                                    )
                                 else:
                                     oldest = min(timestamps)
                                     previous_until = current_filter.get("until")
-                                    if previous_until is not None and oldest > int(previous_until):
-                                        result["completeness"] = "partial"
-                                        result["partial"] = True
+                                    try:
+                                        cursor_stalled = previous_until is not None and oldest >= int(previous_until)
+                                    except (TypeError, ValueError):
+                                        cursor_stalled = True
+                                    if cursor_stalled:
+                                        result["completeness"] = "unknown" if legacy else "partial"
+                                        result["partial"] = not legacy
                                         result["error"] = "pagination cursor did not move backward"
                                     else:
                                         current_filter = dict(base_filter)
                                         current_filter["until"] = oldest
-                                        result["completeness"] = "more-available"
+                                        result["completeness"] = "legacy-pagination" if legacy else "more-available"
                         break
                     elif msg[0] == "CLOSED" and len(msg) >= 2 and msg[1] == sub_id:
                         result["completeness"] = "closed"
@@ -126,7 +140,7 @@ async def query(relay: str, filter_json: str, timeout: float = 15.0, max_pages: 
                         result["error"] = str(msg[1] if len(msg) > 1 else "relay notice")[:240]
 
                 result["pages"] = page_index + 1
-                if result["completeness"] == "more-available":
+                if result["completeness"] in ("more-available", "legacy-pagination"):
                     # Close the previous live subscription before issuing the
                     # next bounded page so unrelated live events cannot starve it.
                     try:
