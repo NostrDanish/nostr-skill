@@ -126,8 +126,15 @@ async def query(relay: str, filter_json: str, timeout: float = 15.0, max_pages: 
                         result["error"] = str(msg[1] if len(msg) > 1 else "relay notice")[:240]
 
                 result["pages"] = page_index + 1
-                if result["completeness"] != "more-available":
-                    break
+                if result["completeness"] == "more-available":
+                    # Close the previous live subscription before issuing the
+                    # next bounded page so unrelated live events cannot starve it.
+                    try:
+                        await ws.send(json.dumps(["CLOSE", sub_id]))
+                    except Exception:
+                        pass
+                    continue
+                break
     except Exception as exc:
         result["completeness"] = "error"
         result["partial"] = True
