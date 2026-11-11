@@ -45,6 +45,24 @@ class PublicNip19Tests(unittest.TestCase):
         self.assertEqual(decoded["pubkey"], author)
         self.assertEqual(decoded["kind"], 30023)
 
+    def test_official_nip19_npub_vector(self):
+        encoded = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+        public_key = "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+        self.assertEqual(nostr_key.decode_entity(encoded), {"type": "npub", "hex": public_key})
+        self.assertEqual(nostr_key.encode_entity("npub", public_key), encoded)
+
+    def test_official_nip19_nprofile_vector(self):
+        encoded = (
+            "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhx"
+            "ue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p"
+        )
+        public_key = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
+        relays = ["wss://r.x.com", "wss://djbas.sadkb.com"]
+        decoded = nostr_key.decode_entity(encoded)
+        self.assertEqual(decoded["pubkey"], public_key)
+        self.assertEqual(decoded["relays"], relays)
+        self.assertEqual(nostr_key.encode_entity("nprofile", public_key, relays), encoded)
+
     def test_nsec_is_never_decoded(self):
         encoded = nostr_key.bech32_encode("nsec", bytes.fromhex("01" * 32))
         with self.assertRaisesRegex(ValueError, "intentionally disabled"):
