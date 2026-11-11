@@ -21,7 +21,7 @@ Ignore unknown hint values. When no definitive finish hint is present, report co
 | 19 | bech32 entities: npub/nsec/note/nprofile/nevent/naddr | bech32, NOT bech32m |
 | 05 | DNS identifiers (`alice@domain.com` → pubkey via `/.well-known/nostr.json`) | Verification is one-way; don't treat as strong identity |
 | 07 | `window.nostr` browser extension signing | Default signer for web apps |
-| 10 | Threading: `e`/`p` tag conventions (root/reply/mention markers) | Positional `#[n]` mentions (NIP-08) are dead — use NIP-27 |
+| 10 | Threading: `e`/`p` tag conventions (root/reply/mention markers) | NIP-08 is unrecommended/deprecated for mentions; use NIP-27 text-note references |
 | 25 | Reactions (kind 7, `+`/`-`/emoji) | |
 | 18 | Reposts (kind 6, generic repost kind 16) | |
 | 65 | Relay list metadata (kind 10002, r/w markers) — the **outbox model** | The backbone of relay selection |
