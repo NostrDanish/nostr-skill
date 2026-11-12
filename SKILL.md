@@ -28,6 +28,8 @@ Client-to-relay messages include EVENT, REQ, CLOSE and AUTH. Relay-to-client mes
 | Encode/decode public NIP-19 references | Use scripts/nostr_key.py for npub, note, nprofile, nevent and naddr only. |
 | Sign events or encrypt/decrypt NIP-44 | Use NIP-07, NIP-46 or a maintained, reviewed cryptographic library behind a dedicated signer. Never pass a secret key to a command-line argument or model context. |
 | Query/publish to a relay or read NIP-11 | Use scripts/nostr_query.py; it accepts only ws/wss relay URLs resolving exclusively to public IPs, pins the TCP destination, disables environment proxies and does not follow NIP-11 redirects. Interpret its completeness field before treating a query as exhaustive. |
+
+**Transport privacy limitation:** `scripts/nostr_query.py` connects directly to a validated public IP. It deliberately ignores environment proxy variables and does not support Tor `.onion` endpoints. Direct relay connections expose the client's network address to the relay; do not use this helper where Tor routing or anonymity is required. Use a separately audited Tor-aware transport with explicit remote-DNS and egress controls instead.
 | Build a client, bot or app | Read references/client-dev.md. |
 | Select a NIP or check deprecation/status | Read references/nips.md, then verify against the live canonical NIPs repository. |
 | Look up event kinds or tag conventions | Read references/kinds.md and the current canonical NIPs source. |
