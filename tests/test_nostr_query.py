@@ -112,5 +112,47 @@ class NostrQueryCompletenessTests(unittest.TestCase):
         self.assertTrue(result["partial"])
         self.assertFalse(result["complete"])
 
+
+
+    def setUp(self):
+        self.dns_patch = patch.object(
+            nostr_query.socket,
+            "getaddrinfo",
+            return_value=[
+                (nostr_query.socket.AF_INET, nostr_query.socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))
+            ],
+        )
+        self.dns_patch.start()
+        self.addCleanup(self.dns_patch.stop)
+
+    def test_websocket_connect_is_dns_pinned_and_proxy_disabled(self):
+        ws = FakeWebSocket([[["EOSE", "q-0", ["finish"]]]])
+        with patch.object(nostr_query.websockets, "connect", return_value=ws) as connect:
+            result = asyncio.run(nostr_query.query("wss://relay.example", "{}"))
+        self.assertTrue(result["complete"])
+        self.assertEqual(connect.call_args.kwargs["host"], "8.8.8.8")
+        self.assertEqual(connect.call_args.kwargs["port"], 443)
+        self.assertIsNone(connect.call_args.kwargs["proxy"])
+
+    def test_websocket_rejects_loopback_and_private_dns(self):
+        with self.assertRaisesRegex(ValueError, "non-public"):
+            nostr_query._relay_connect("wss://127.0.0.1", 1)
+        self.dns_patch.stop()
+        with patch.object(
+            nostr_query.socket,
+            "getaddrinfo",
+            return_value=[
+                (nostr_query.socket.AF_INET, nostr_query.socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443)),
+                (nostr_query.socket.AF_INET, nostr_query.socket.SOCK_STREAM, 6, "", ("10.0.0.8", 443)),
+            ],
+        ):
+            with self.assertRaisesRegex(ValueError, "non-public"):
+                nostr_query._relay_connect("wss://rebind.example", 1)
+
+    def test_nip11_rejects_private_endpoint_before_connecting(self):
+        with self.assertRaisesRegex(ValueError, "non-public"):
+            nostr_query.info("wss://127.0.0.1")
+
+
 if __name__ == "__main__":
     unittest.main()
