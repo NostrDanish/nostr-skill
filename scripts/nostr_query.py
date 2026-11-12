@@ -9,12 +9,156 @@ AUTH requirements, timeouts, CLOSED and pagination failures remain incomplete.
 
 from __future__ import annotations
 import asyncio
+import http.client
+import ipaddress
 import json
+import socket
+import ssl
 import sys
 from urllib.parse import urlsplit
-import urllib.request
 
 import websockets
+
+
+
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+_MAX_INFO_BYTES = 1024 * 1024
+
+
+def _resolve_public_target(url: str, allowed_schemes: set[str]):
+    """Validate a network URL and resolve only globally routable destinations.
+
+    The returned IPs must be used for the socket connection. Resolving here and
+    letting a second resolver call happen later would reintroduce DNS rebinding.
+    Every A/AAAA answer is checked; mixed public/private answers are rejected.
+    """
+    try:
+        parts = urlsplit(url)
+        scheme = parts.scheme.lower()
+        host = parts.hostname
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError(f"invalid endpoint URL: {exc}") from exc
+
+    if scheme not in allowed_schemes:
+        raise ValueError(f"unsupported endpoint scheme: {scheme}")
+    if not host:
+        raise ValueError("endpoint URL has no hostname")
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("credentials in endpoint URLs are not permitted")
+    if parts.fragment:
+        raise ValueError("endpoint URL fragments are not permitted")
+    if "%" in host:
+        raise ValueError("scoped IP literals are not permitted")
+
+    default_port = 443 if scheme in ("https", "wss") else 80
+    port = port if port is not None else default_port
+    if not 1 <= port <= 65535:
+        raise ValueError("endpoint port is out of range")
+
+    try:
+        literal = ipaddress.ip_address(host)
+        ascii_host = str(literal)
+        addresses = (literal,)
+    except ValueError:
+        try:
+            ascii_host = host.encode("idna").decode("ascii")
+            infos = socket.getaddrinfo(ascii_host, port, type=socket.SOCK_STREAM)
+        except (UnicodeError, socket.gaierror, OSError) as exc:
+            raise ValueError(f"DNS resolution failed for {host}: {exc}") from exc
+        addresses = tuple(dict.fromkeys(
+            ipaddress.ip_address(info[4][0].split("%", 1)[0])
+            for info in infos
+        ))
+
+    if not addresses:
+        raise ValueError(f"DNS returned no addresses for {host}")
+    for address in addresses:
+        if not address.is_global or address in _CGNAT:
+            raise ValueError(f"endpoint resolves to non-public address {address}")
+    return parts, ascii_host, port, tuple(str(address) for address in addresses)
+
+
+def _relay_connect(relay: str, timeout: float):
+    """Return a websockets connection pinned to a validated public IP.
+
+    websockets keeps the URI hostname for TLS SNI/certificate verification and
+    the Host header when host/port override only the TCP destination.
+    Environment proxies are disabled so they cannot bypass this pin.
+    """
+    _parts, _host, port, addresses = _resolve_public_target(relay, {"ws", "wss"})
+    return websockets.connect(
+        relay,
+        host=addresses[0],
+        port=port,
+        proxy=None,
+        open_timeout=timeout,
+        close_timeout=2,
+    )
+
+
+def _pinned_nip11_json(url: str, timeout: float) -> dict:
+    """Fetch a NIP-11 document over a pinned socket; never follow redirects."""
+    parts, host, port, addresses = _resolve_public_target(url, {"http", "https"})
+    path = parts.path or "/"
+    if parts.query:
+        path += "?" + parts.query
+
+    host_header = f"[{host}]" if ":" in host else host
+    default_port = 443 if parts.scheme.lower() == "https" else 80
+    if port != default_port:
+        host_header += f":{port}"
+
+    last_error = None
+    for address in addresses:
+        raw_socket = None
+        connection = None
+        try:
+            raw_socket = socket.create_connection((address, port), timeout=timeout)
+            if parts.scheme.lower() == "https":
+                raw_socket = ssl.create_default_context().wrap_socket(
+                    raw_socket, server_hostname=host
+                )
+            connection = http.client.HTTPConnection(host, port, timeout=timeout)
+            connection.sock = raw_socket
+            raw_socket = None
+            connection.putrequest("GET", path, skip_host=True, skip_accept_encoding=True)
+            connection.putheader("Host", host_header)
+            connection.putheader("Accept", "application/nostr+json")
+            connection.putheader("Connection", "close")
+            connection.endheaders()
+
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise ValueError("NIP-11 redirects are not followed; validate the new URL separately")
+            if response.status != 200:
+                raise ValueError(f"NIP-11 endpoint returned HTTP {response.status}")
+            length = response.getheader("Content-Length")
+            if length is not None:
+                try:
+                    if int(length) > _MAX_INFO_BYTES:
+                        raise ValueError("NIP-11 response exceeds 1 MiB")
+                except ValueError as exc:
+                    if "exceeds" in str(exc):
+                        raise
+                    raise ValueError("invalid NIP-11 Content-Length") from exc
+            body = response.read(_MAX_INFO_BYTES + 1)
+            if len(body) > _MAX_INFO_BYTES:
+                raise ValueError("NIP-11 response exceeds 1 MiB")
+            parsed = json.loads(body.decode("utf-8"))
+            if not isinstance(parsed, dict):
+                raise ValueError("NIP-11 response must be a JSON object")
+            return parsed
+        except OSError as exc:
+            last_error = exc
+        finally:
+            if connection is not None:
+                connection.close()
+            elif raw_socket is not None:
+                raw_socket.close()
+
+    raise ValueError(f"couldn't connect to any validated NIP-11 address: {last_error}")
+
 
 def classify_eose_hints(hints: list[str]) -> tuple[str, str | None]:
     """Classify NIP-67 hints; absent/unknown hints use legacy pagination."""
@@ -46,7 +190,7 @@ async def query(relay: str, filter_json: str, timeout: float = 15.0, max_pages: 
     current_filter = dict(base_filter)
 
     try:
-        async with websockets.connect(relay, open_timeout=timeout, close_timeout=2) as ws:
+        async with _relay_connect(relay, timeout) as ws:
             for page_index in range(max_pages):
                 sub_id = f"q-{page_index}"
                 await ws.send(json.dumps(["REQ", sub_id, current_filter]))
@@ -162,7 +306,7 @@ async def query(relay: str, filter_json: str, timeout: float = 15.0, max_pages: 
 
 async def publish(relay: str, event_json: str, timeout: float = 15.0) -> dict:
     event = json.loads(event_json)
-    async with websockets.connect(relay, open_timeout=timeout, close_timeout=2) as ws:
+    async with _relay_connect(relay, timeout) as ws:
         await ws.send(json.dumps(["EVENT", event]))
         while True:
             raw = await asyncio.wait_for(ws.recv(), timeout=timeout)
@@ -177,10 +321,8 @@ def info(relay: str, timeout: float = 15.0) -> dict:
     if parts.scheme not in ("ws", "wss") or not parts.netloc:
         raise ValueError("relay must be a ws:// or wss:// URL")
     scheme = "https" if parts.scheme == "wss" else "http"
-    url = scheme + "://" + parts.netloc + parts.path
-    req = urllib.request.Request(url, headers={"Accept": "application/nostr+json"})
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        return json.load(response)
+    url = parts._replace(scheme=scheme).geturl()
+    return _pinned_nip11_json(url, timeout)
 
 def main() -> int:
     if len(sys.argv) < 2:
