@@ -27,7 +27,7 @@ Client-to-relay messages include EVENT, REQ, CLOSE and AUTH. Relay-to-client mes
 |---|---|
 | Encode/decode public NIP-19 references | Use scripts/nostr_key.py for npub, note, nprofile, nevent and naddr only. |
 | Sign events or encrypt/decrypt NIP-44 | Use NIP-07, NIP-46 or a maintained, reviewed cryptographic library behind a dedicated signer. Never pass a secret key to a command-line argument or model context. |
-| Query/publish to a relay or read NIP-11 | Use scripts/nostr_query.py; interpret its completeness field before treating a query as exhaustive. |
+| Query/publish to a relay or read NIP-11 | Use scripts/nostr_query.py; it accepts only ws/wss relay URLs resolving exclusively to public IPs, pins the TCP destination, disables environment proxies and does not follow NIP-11 redirects. Interpret its completeness field before treating a query as exhaustive. |
 | Build a client, bot or app | Read references/client-dev.md. |
 | Select a NIP or check deprecation/status | Read references/nips.md, then verify against the live canonical NIPs repository. |
 | Look up event kinds or tag conventions | Read references/kinds.md and the current canonical NIPs source. |
@@ -45,7 +45,7 @@ Client-to-relay messages include EVENT, REQ, CLOSE and AUTH. Relay-to-client mes
 ## Protocol correctness rules
 
 1. Recompute and verify event ids and signatures before trusting event data. A syntactically valid event is not automatically an authentic or truthful statement.
-2. Treat kind 0, kind 3 and kind 10002 data as untrusted inputs. Validate schemas and relay URLs before using them.
+2. Treat kind 0, kind 3 and kind 10002 data as untrusted inputs. Validate schemas and relay URLs before using them. The bundled relay helper repeats public-destination checks, pins the actual TCP destination to the validated DNS result, disables ambient proxies and refuses NIP-11 redirects. Do not bypass those checks with a direct client connection from an agent.
 3. NIP-04 is final but unrecommended/deprecated in favor of NIP-17. NIP-96 is draft and unrecommended, with Blossom (NIP-B7) as its replacement. Preserve legacy interoperability when required; do not call these specifications nonexistent or universally unsupported.
 4. Use NIP-65 read/write relay metadata when appropriate. A single large relay is not a complete view of the network.
 5. Updating a replaceable event does not guarantee every relay or mirror has removed the prior version. A NIP-09 deletion event is a request, not a universal erase guarantee.
