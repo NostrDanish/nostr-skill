@@ -154,5 +154,80 @@ class NostrQueryCompletenessTests(unittest.TestCase):
             nostr_query.info("wss://127.0.0.1")
 
 
+    def test_nip11_uses_pinned_socket_and_preserves_host_header(self):
+        raw_socket = object()
+        created = []
+        connections = []
+
+        class FakeResponse:
+            status = 200
+            def getheader(self, name):
+                return str(len(b'{"name":"relay"}')) if name == "Content-Length" else None
+            def read(self, limit):
+                return b'{"name":"relay"}'
+
+        class FakeHTTPConnection:
+            def __init__(self, host, port, timeout):
+                self.host, self.port, self.timeout = host, port, timeout
+                self.headers = []
+                self.sock = None
+                self.request_line = None
+                connections.append(self)
+            def putrequest(self, method, path, **kwargs):
+                self.request_line = (method, path, kwargs)
+            def putheader(self, name, value):
+                self.headers.append((name, value))
+            def endheaders(self):
+                pass
+            def getresponse(self):
+                return FakeResponse()
+            def close(self):
+                pass
+
+        with patch.object(nostr_query.socket, "create_connection", side_effect=lambda addr, timeout: created.append((addr, timeout)) or raw_socket):
+            with patch.object(nostr_query.http.client, "HTTPConnection", FakeHTTPConnection):
+                result = nostr_query.info("ws://relay.example/nostr?x=1", timeout=2)
+
+        self.assertEqual(result, {"name": "relay"})
+        self.assertEqual(created, [(("8.8.8.8", 80), 2)])
+        conn = connections[0]
+        self.assertIs(conn.sock, raw_socket)
+        self.assertEqual(conn.request_line[0:2], ("GET", "/nostr?x=1"))
+        self.assertIn(("Host", "relay.example"), conn.headers)
+        self.assertIn(("Accept", "application/nostr+json"), conn.headers)
+
+    def test_nip11_redirect_is_rejected_without_following(self):
+        calls = []
+
+        class FakeResponse:
+            status = 302
+            def getheader(self, name):
+                return "http://127.0.0.1/admin" if name == "Location" else None
+            def read(self, limit):
+                return b""
+
+        class FakeHTTPConnection:
+            def __init__(self, host, port, timeout):
+                self.sock = None
+            def putrequest(self, *args, **kwargs):
+                pass
+            def putheader(self, *args, **kwargs):
+                pass
+            def endheaders(self):
+                pass
+            def getresponse(self):
+                calls.append("response")
+                return FakeResponse()
+            def close(self):
+                pass
+
+        with patch.object(nostr_query.socket, "create_connection", return_value=object()) as connect:
+            with patch.object(nostr_query.http.client, "HTTPConnection", FakeHTTPConnection):
+                with self.assertRaisesRegex(ValueError, "redirects are not followed"):
+                    nostr_query.info("ws://relay.example")
+        self.assertEqual(connect.call_count, 1)
+        self.assertEqual(calls, ["response"])
+
+
 if __name__ == "__main__":
     unittest.main()
