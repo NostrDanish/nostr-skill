@@ -63,3 +63,11 @@ Client-to-relay messages include EVENT, REQ, CLOSE and AUTH. Relay-to-client mes
 ## Source hierarchy
 
 Use the canonical NIPs repository for specification status and normative wording, maintained implementations as secondary evidence, and articles/social posts only as supporting context. Record source URL, revision/date and whether a feature is draft, final, unrecommended, optional or implementation-specific when the distinction affects the implementation.
+
+## Project knowledge and handover integration
+
+When this skill is used inside an owner's ongoing Nostr project portfolio, first consult the configured project knowledge workspace (Second Brain / Workbench) when a Notion connection is available. Read the canonical project record, current task, latest handover and repository/build atlas before changing code. Search for existing implementations, parallel work and known decisions; do not create a duplicate client, relay, helper or event contract just because the current repository does not contain it.
+
+For cross-repository work, identify every affected implementation (clients, signers, relays, crawlers, indexers, search engines and skills) and record the compatibility impact. Keep the canonical repository as code truth and upstream NIPs as protocol truth; Notion is coordination/context, not a substitute for normative specifications or current code.
+
+At the end of meaningful work, update the linked task and project record with exact repositories, branches/commits, files changed, tests actually run, untested behavior, risks and the next exact action. Leave a dated handover another agent can execute. Never write secrets, private keys, tokens or sensitive user data into Notion, issues, logs or handovers. If the workspace is unavailable, continue safely from repository docs and state that no workspace update was made.
