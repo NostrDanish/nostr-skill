@@ -37,8 +37,10 @@ jobs:
             if [ -d "$dir" ]; then cp -R "$dir" "$RUNNER_TEMP/skill-root/nostr/$dir"; fi
           done
           skills-ref validate "$RUNNER_TEMP/skill-root/nostr"
+      # websockets 15 supports host/port pinning and explicit proxy=None.
+      # Keep the tested transport API stable for DNS-rebinding protection.
       - name: Install relay query dependency
-        run: python -m pip install "websockets>=12,<16"
+        run: python -m pip install "websockets==15.0.1"
       - name: Compile Python helpers
         run: python -m py_compile scripts/nostr_key.py scripts/nostr_query.py
       - name: Run public NIP-19 safety tests
